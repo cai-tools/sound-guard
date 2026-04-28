@@ -52,13 +52,7 @@ jobs:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
       - name: Publish self-contained (win-x64)
-        run: |
-          dotnet publish SoundMonitor.csproj \
-            --configuration ${{ env.CONFIGURATION }} \
-            --output ./publish-win-x64 \
-            --runtime win-x64 \
-            --self-contained true \
-            -p:PublishSingleFile=true
+        run: dotnet publish SoundMonitor.csproj --configuration ${{ env.CONFIGURATION }} --output ./publish-win-x64 --runtime win-x64 --self-contained true -p:PublishSingleFile=true
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
