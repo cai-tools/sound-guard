@@ -24,13 +24,13 @@ jobs:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
       - name: Restore dependencies
-        run: dotnet restore SoundMonitor/SoundMonitor.csproj
+        run: dotnet restore SoundMonitor.csproj
 
       - name: Build
-        run: dotnet build SoundMonitor/SoundMonitor.csproj --configuration ${{ env.CONFIGURATION }} --no-restore
+        run: dotnet build SoundMonitor.csproj --configuration ${{ env.CONFIGURATION }} --no-restore
 
       - name: Publish
-        run: dotnet publish SoundMonitor/SoundMonitor.csproj --configuration ${{ env.CONFIGURATION }} --output ./publish --self-contained false
+        run: dotnet publish SoundMonitor.csproj --configuration ${{ env.CONFIGURATION }} --output ./publish --self-contained false
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -53,7 +53,7 @@ jobs:
 
       - name: Publish self-contained (win-x64)
         run: |
-          dotnet publish SoundMonitor/SoundMonitor.csproj \
+          dotnet publish SoundMonitor.csproj \
             --configuration ${{ env.CONFIGURATION }} \
             --output ./publish-win-x64 \
             --runtime win-x64 \
