@@ -1,0 +1,68 @@
+name: Build WPF Application
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+env:
+  DOTNET_VERSION: '8.0.x'
+  CONFIGURATION: Release
+
+jobs:
+  build:
+    runs-on: windows-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore dependencies
+        run: dotnet restore SoundMonitor/SoundMonitor.csproj
+
+      - name: Build
+        run: dotnet build SoundMonitor/SoundMonitor.csproj --configuration ${{ env.CONFIGURATION }} --no-restore
+
+      - name: Publish
+        run: dotnet publish SoundMonitor/SoundMonitor.csproj --configuration ${{ env.CONFIGURATION }} --output ./publish --self-contained false
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: SoundMonitor-${{ runner.os }}
+          path: ./publish/**/*
+          retention-days: 30
+
+  build-self-contained:
+    runs-on: windows-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Publish self-contained (win-x64)
+        run: |
+          dotnet publish SoundMonitor/SoundMonitor.csproj \
+            --configuration ${{ env.CONFIGURATION }} \
+            --output ./publish-win-x64 \
+            --runtime win-x64 \
+            --self-contained true \
+            -p:PublishSingleFile=true
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: SoundMonitor-win-x64-self-contained
+          path: ./publish-win-x64/**/*
+          retention-days: 30

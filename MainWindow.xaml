@@ -1,0 +1,196 @@
+<Window x:Class="SoundMonitor.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:lvc="clr-namespace:LiveChartsCore.SkiaSharpView.WPF;assembly=LiveChartsCore.SkiaSharpView.WPF"
+        xmlns:vm="clr-namespace:SoundMonitor.ViewModels"
+        xmlns:converters="clr-namespace:SoundMonitor.Converters"
+        mc:Ignorable="d"
+        Title="麦克风分贝监控器"
+        Height="600" Width="800"
+        MinHeight="500" MinWidth="600"
+        WindowStartupLocation="CenterScreen"
+        Background="#FAFAFA">
+
+    <Window.Resources>
+        <converters:DecibelToColorConverter x:Key="LevelToColorConverter"/>
+        <converters:BoolToButtonTextConverter x:Key="BoolToTextConverter"/>
+
+        <!-- 按钮样式 -->
+        <Style x:Key="PrimaryButton" TargetType="Button">
+            <Setter Property="Background" Value="#2196F3"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="Padding" Value="20,10"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                CornerRadius="5"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#1976D2"/>
+                </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Background" Value="#BDBDBD"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="DangerButton" TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
+            <Setter Property="Background" Value="#F44336"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#D32F2F"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- 卡片样式 -->
+        <Style x:Key="CardBorder" TargetType="Border">
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="CornerRadius" Value="10"/>
+            <Setter Property="Padding" Value="20"/>
+            <Setter Property="Margin" Value="10"/>
+            <Setter Property="Effect">
+                <Setter.Value>
+                    <DropShadowEffect BlurRadius="10" ShadowDepth="2" Opacity="0.1"/>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- 标题区 -->
+        <StackPanel Grid.Row="0" HorizontalAlignment="Center" Margin="0,0,0,20">
+            <TextBlock Text="🎤 麦克风分贝监控器"
+                       FontSize="28" FontWeight="Bold"
+                       Foreground="#333"/>
+            <TextBlock Text="{Binding StatusText}"
+                       FontSize="14" Foreground="Gray"
+                       HorizontalAlignment="Center" Margin="0,5,0,0"/>
+        </StackPanel>
+
+        <!-- 控制面板 -->
+        <Border Grid.Row="1" Style="{StaticResource CardBorder}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0" Orientation="Horizontal">
+                    <TextBlock Text="麦克风设备:" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                    <ComboBox ItemsSource="{Binding Devices}"
+                              SelectedIndex="{Binding SelectedDeviceIndex}"
+                              Width="300" Margin="0,0,20,0"
+                              VerticalContentAlignment="Center"/>
+                </StackPanel>
+
+                <Button Grid.Column="1"
+                        Content="{Binding IsMonitoring, Converter={StaticResource BoolToTextConverter}}"
+                        Command="{Binding ToggleMonitoringCommand}"
+                        Style="{StaticResource PrimaryButton}"
+                        Width="120"/>
+            </Grid>
+        </Border>
+
+        <!-- 主显示区 -->
+        <Grid Grid.Row="2">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="300"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- 仪表盘 -->
+            <Border Grid.Column="0" Style="{StaticResource CardBorder}">
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <!-- 分贝数字显示 -->
+                    <Border Background="{Binding CurrentLevel, Converter={StaticResource LevelToColorConverter}}"
+                            CornerRadius="10" Padding="30,20">
+                        <StackPanel HorizontalAlignment="Center">
+                            <TextBlock Text="{Binding CurrentDecibel, StringFormat={}{0:F1}}"
+                                       FontSize="64" FontWeight="Bold" Foreground="White"
+                                       HorizontalAlignment="Center"/>
+                            <TextBlock Text="dB"
+                                       FontSize="24" Foreground="White"
+                                       HorizontalAlignment="Center"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- 级别指示 -->
+                    <Border Background="{Binding CurrentLevel, Converter={StaticResource LevelToColorConverter}}"
+                            CornerRadius="5" Padding="15,8" Margin="0,20,0,0">
+                        <TextBlock Text="{Binding LevelText}"
+                                   FontSize="18" FontWeight="Bold" Foreground="White"
+                                   HorizontalAlignment="Center"/>
+                    </Border>
+
+                    <!-- 进度条 -->
+                    <ProgressBar Value="{Binding CurrentDecibel}"
+                                 Maximum="120"
+                                 Height="20" Margin="0,20,0,0"
+                                 Background="#E0E0E0"
+                                 Foreground="{Binding CurrentLevel, Converter={StaticResource LevelToColorConverter}}"/>
+                    <TextBlock Text="0                                     120 dB"
+                               FontSize="10" Foreground="Gray" Margin="0,5,0,0"/>
+                </StackPanel>
+            </Border>
+
+            <!-- 曲线图 -->
+            <Border Grid.Column="1" Style="{StaticResource CardBorder}">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" Text="📈 分贝曲线"
+                               FontSize="16" FontWeight="Bold"
+                               Margin="0,0,0,10"/>
+
+                    <lvc:CartesianChart Grid.Row="1"
+                                        Series="{Binding Series}"
+                                        XAxes="{Binding XAxes}"
+                                        YAxes="{Binding YAxes}"
+                                        ZoomMode="X"
+                                        TooltipPosition="Hidden"/>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <!-- 阈值说明 -->
+        <Border Grid.Row="3" Style="{StaticResource CardBorder}">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                <Border Background="#4CAF50" CornerRadius="3" Padding="10,5" Margin="0,0,10,0">
+                    <TextBlock Text="安静 0-40dB" Foreground="White" FontWeight="Bold"/>
+                </Border>
+                <Border Background="#2196F3" CornerRadius="3" Padding="10,5" Margin="0,0,10,0">
+                    <TextBlock Text="正常 40-60dB" Foreground="White" FontWeight="Bold"/>
+                </Border>
+                <Border Background="#FF9800" CornerRadius="3" Padding="10,5" Margin="0,0,10,0">
+                    <TextBlock Text="嘈杂 60-80dB" Foreground="White" FontWeight="Bold"/>
+                </Border>
+                <Border Background="#F44336" CornerRadius="3" Padding="10,5">
+                    <TextBlock Text="危险 80+dB" Foreground="White" FontWeight="Bold"/>
+                </Border>
+            </StackPanel>
+        </Border>
+    </Grid>
+</Window>
