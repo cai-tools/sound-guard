@@ -35,11 +35,14 @@ public class NotificationService
 
         try
         {
-            new ToastContentBuilder()
+            var toastContent = new ToastContentBuilder()
                 .AddText(title)
                 .AddText(message)
                 .AddAttributionText($"SoundMonitor - {decibel:F1} dB")
-                .Show();
+                .GetToastContent();
+
+            var toast = new ToastNotification(toastContent.GetXml());
+            ToastNotificationManagerCompat.CreateToastNotifier().Show(toast);
         }
         catch (Exception ex)
         {
