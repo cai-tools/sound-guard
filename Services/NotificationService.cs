@@ -1,5 +1,6 @@
 using Microsoft.Toolkit.Uwp.Notifications;
 using SoundMonitor.Models;
+using Windows.UI.Notifications;
 
 namespace SoundMonitor.Services;
 
@@ -35,14 +36,11 @@ public class NotificationService
 
         try
         {
-            var toastContent = new ToastContentBuilder()
+            new ToastContentBuilder()
                 .AddText(title)
                 .AddText(message)
                 .AddAttributionText($"SoundMonitor - {decibel:F1} dB")
-                .GetToastContent();
-
-            var toast = new ToastNotification(toastContent.GetXml());
-            ToastNotificationManagerCompat.CreateToastNotifier().Show(toast);
+                .Show();
         }
         catch (Exception ex)
         {
