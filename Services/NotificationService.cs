@@ -1,6 +1,6 @@
-using Microsoft.Toolkit.Uwp.Notifications;
 using SoundMonitor.Models;
-using Windows.UI.Notifications;
+using System.Drawing;
+using System.Windows.Forms;
 
 namespace SoundMonitor.Services;
 
@@ -9,23 +9,46 @@ namespace SoundMonitor.Services;
 /// </summary>
 public class NotificationService
 {
-    private ThresholdLevel _lastNotifiedLevel = ThresholdLevel.Quiet;
+    private const double NotifyThreshold = 50.0;
+    private const double RearmThreshold = 45.0;
     private DateTime _lastNotificationTime = DateTime.MinValue;
     private readonly TimeSpan _notificationCooldown = TimeSpan.FromSeconds(5);
+    private readonly NotifyIcon _notifyIcon;
+    private bool _alertLatched;
+
+    public NotificationService()
+    {
+        _notifyIcon = new NotifyIcon
+        {
+            Visible = true,
+            Icon = SystemIcons.Information,
+            Text = "SoundMonitor"
+        };
+    }
 
     /// <summary>
     /// 显示分贝警告通知
     /// </summary>
-    public void ShowDecibelNotification(double decibel, ThresholdLevel level)
+    public bool ShowDecibelNotification(double decibel, ThresholdLevel level)
     {
+        // 回落到安全值后，重新允许下一次告警触发。
+        if (decibel < RearmThreshold)
+        {
+            _alertLatched = false;
+            return false;
+        }
+
+        if (decibel < NotifyThreshold) return false;
+        if (_alertLatched) return false;
+
         // 冷却时间检查，避免频繁通知
         if (DateTime.Now - _lastNotificationTime < _notificationCooldown)
-            return;
-
-        if (level <= ThresholdLevel.Normal) return; // 只在嘈杂以上通知
+        {
+            return false;
+        }
 
         _lastNotificationTime = DateTime.Now;
-        _lastNotifiedLevel = level;
+        _alertLatched = true;
 
         var (title, message, icon) = level switch
         {
@@ -36,16 +59,19 @@ public class NotificationService
 
         try
         {
-            new ToastContentBuilder()
-                .AddText(title)
-                .AddText(message)
-                .AddAttributionText($"SoundMonitor - {decibel:F1} dB")
-                .Show();
+            _notifyIcon.BalloonTipTitle = title;
+            _notifyIcon.BalloonTipText = message;
+            _notifyIcon.BalloonTipIcon = level == ThresholdLevel.Danger
+                ? ToolTipIcon.Error
+                : ToolTipIcon.Warning;
+            _notifyIcon.ShowBalloonTip(3000);
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"通知失败: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"气泡通知失败: {ex.Message}");
         }
+
+        return true;
     }
 
     /// <summary>
@@ -53,6 +79,6 @@ public class NotificationService
     /// </summary>
     public static void ClearAll()
     {
-        ToastNotificationManagerCompat.History.Clear();
+        // 当前使用气泡通知，不写入通知中心历史。
     }
 }

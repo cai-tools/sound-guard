@@ -5,11 +5,8 @@ namespace SoundMonitor.Services;
 /// </summary>
 public static class DecibelCalculator
 {
-    // 参考振幅（用于归一化到 dB SPL 近似值）
-    private const double ReferenceAmplitude = 0.00002; // 20 µPa 空气中标准参考声压
-
-    // 麦克风输入的满量程参考值（16位音频为 32768）
-    private const double FullScaleReference = 32768.0;
+    // 将 dBFS 粗略映射到 UI 的 0-120 区间，便于实时观察曲线变化。
+    private const double DisplayOffset = 90.0;
 
     /// <summary>
     /// 计算分贝值（dB）
@@ -35,12 +32,13 @@ public static class DecibelCalculator
         if (rms < 1e-10)
             return 0;
 
-        double db = 20 * Math.Log10(rms / FullScaleReference);
+        // samples 已经在 [-1, 1] 区间，直接计算 dBFS。
+        double db = 20 * Math.Log10(rms);
 
         // 将负值范围映射到 0-100 dB
         // 典型范围：-60 dBFS 到 0 dBFS
         // 映射到 0-100 dB SPL 近似值
-        db = Math.Max(0, db + 90); // 偏移使静音接近 0 dB
+        db = Math.Max(0, db + DisplayOffset); // 偏移使静音接近 0 dB
 
         return Math.Min(120, db); // 限制最大值
     }

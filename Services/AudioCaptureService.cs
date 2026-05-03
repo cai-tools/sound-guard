@@ -40,9 +40,15 @@ public class AudioCaptureService : IDisposable
 
             try
             {
+                var targetDevice = deviceNumber;
+                if (targetDevice >= WaveIn.DeviceCount)
+                {
+                    targetDevice = -1;
+                }
+
                 _waveIn = new WaveInEvent
                 {
-                    DeviceNumber = deviceNumber >= 0 ? deviceNumber : 0,
+                    DeviceNumber = targetDevice,
                     WaveFormat = new WaveFormat(sampleRate, 16, 1) // 单声道，16位
                 };
 

@@ -16,6 +16,7 @@
     <Window.Resources>
         <converters:DecibelToColorConverter x:Key="LevelToColorConverter"/>
         <converters:BoolToButtonTextConverter x:Key="BoolToTextConverter"/>
+        <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
 
         <!-- 按钮样式 -->
         <Style x:Key="PrimaryButton" TargetType="Button">
@@ -85,6 +86,18 @@
             <TextBlock Text="{Binding StatusText}"
                        FontSize="14" Foreground="Gray"
                        HorizontalAlignment="Center" Margin="0,5,0,0"/>
+
+            <Border Margin="0,10,0,0"
+                    Padding="12,6"
+                    CornerRadius="6"
+                    Background="#FFF3CD"
+                    BorderBrush="#FFC107"
+                    BorderThickness="1"
+                    Visibility="{Binding IsAlertVisible, Converter={StaticResource BooleanToVisibilityConverter}}">
+                <TextBlock Text="{Binding AlertText}"
+                           Foreground="#8A6D3B"
+                           FontWeight="Bold"/>
+            </Border>
         </StackPanel>
 
         <!-- 控制面板 -->
@@ -179,16 +192,16 @@
         <Border Grid.Row="3" Style="{StaticResource CardBorder}">
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                 <Border Background="#4CAF50" CornerRadius="3" Padding="10,5" Margin="0,0,10,0">
-                    <TextBlock Text="安静 0-40dB" Foreground="White" FontWeight="Bold"/>
+                    <TextBlock Text="安静 0-30dB" Foreground="White" FontWeight="Bold"/>
                 </Border>
                 <Border Background="#2196F3" CornerRadius="3" Padding="10,5" Margin="0,0,10,0">
-                    <TextBlock Text="正常 40-60dB" Foreground="White" FontWeight="Bold"/>
+                    <TextBlock Text="正常 30-50dB" Foreground="White" FontWeight="Bold"/>
                 </Border>
                 <Border Background="#FF9800" CornerRadius="3" Padding="10,5" Margin="0,0,10,0">
-                    <TextBlock Text="嘈杂 60-80dB" Foreground="White" FontWeight="Bold"/>
+                    <TextBlock Text="嘈杂 50-70dB" Foreground="White" FontWeight="Bold"/>
                 </Border>
                 <Border Background="#F44336" CornerRadius="3" Padding="10,5">
-                    <TextBlock Text="危险 80+dB" Foreground="White" FontWeight="Bold"/>
+                    <TextBlock Text="危险 70+dB" Foreground="White" FontWeight="Bold"/>
                 </Border>
             </StackPanel>
         </Border>

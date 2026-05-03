@@ -43,6 +43,12 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private bool _isMonitoring;
 
     [ObservableProperty]
+    private bool _isAlertVisible;
+
+    [ObservableProperty]
+    private string _alertText = string.Empty;
+
+    [ObservableProperty]
     private int _selectedDeviceIndex;
 
     public ObservableCollection<string> Devices { get; } = new();
@@ -69,6 +75,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
             LabelsPaint = new SolidColorPaint(SKColors.Gray),
             MinLimit = 0,
             MaxLimit = 120,
+            MinStep = 20,
+            ForceStepToMin = true,
             SeparatorsPaint = new SolidColorPaint(new SKColor(230, 230, 230))
         }
     };
@@ -111,6 +119,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private void LoadDevices()
     {
         Devices.Clear();
+        Devices.Add("系统默认设备");
+
         var devices = AudioCaptureService.GetDevices();
         if (devices.Count == 0)
         {
@@ -123,6 +133,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
                 Devices.Add(device);
             }
         }
+
+        SelectedDeviceIndex = 0;
     }
 
     [RelayCommand]
@@ -143,11 +155,20 @@ public partial class MainViewModel : ObservableObject, IDisposable
     {
         if (IsMonitoring) return;
 
+        var deviceNumber = SelectedDeviceIndex <= 0 ? -1 : SelectedDeviceIndex - 1;
+
         _audioService.Start(
-            SelectedDeviceIndex,
+            deviceNumber,
             44100,
             OnAudioDataAvailable
         );
+
+        if (!_audioService.IsCapturing)
+        {
+            IsMonitoring = false;
+            StatusText = "启动失败：请检查麦克风设备或权限";
+            return;
+        }
 
         _timer.Start();
         IsMonitoring = true;
@@ -165,8 +186,13 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
     private void OnAudioDataAvailable(byte[] buffer, int bytesRecorded)
     {
+        if (bytesRecorded <= 0) return;
+
+        var effectiveBuffer = new byte[bytesRecorded];
+        Array.Copy(buffer, effectiveBuffer, bytesRecorded);
+
         // 分贝计算在 UI 线程外完成
-        double db = DecibelCalculator.CalculateDecibel(buffer, 2);
+        double db = DecibelCalculator.CalculateDecibel(effectiveBuffer, 2);
 
         // 更新到 UI（需要 Dispatcher）
         App.Current?.Dispatcher.Invoke(() =>
@@ -177,6 +203,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
     }
 
     private int _updateCounter = 0;
+    private DateTime _lastInAppAlertTime = DateTime.MinValue;
+    private readonly TimeSpan _inAppAlertCooldown = TimeSpan.FromSeconds(5);
 
     private void UpdateLevel(double decibel)
     {
@@ -203,6 +231,19 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
         // 触发通知
         _notificationService.ShowDecibelNotification(decibel, newLevel);
+
+        if (decibel >= 50 && DateTime.Now - _lastInAppAlertTime >= _inAppAlertCooldown)
+        {
+            _lastInAppAlertTime = DateTime.Now;
+            AlertText = newLevel == ThresholdLevel.Danger
+                ? $"危险提醒: {decibel:F1} dB"
+                : $"嘈杂提醒: {decibel:F1} dB";
+            IsAlertVisible = true;
+        }
+        else if (decibel < 50)
+        {
+            IsAlertVisible = false;
+        }
     }
 
     public void Dispose()

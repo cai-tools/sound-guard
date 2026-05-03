@@ -1,0 +1,21 @@
+# Build outputs
+bin/
+obj/
+
+# User-specific files
+*.user
+*.rsuser
+*.suo
+
+# Visual Studio / VS Code
+.vs/
+.vscode/
+
+# Logs
+*.log
+
+# Test results
+TestResults/
+
+# NuGet packages folder (if used)
+packages/
