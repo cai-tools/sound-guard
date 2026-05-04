@@ -80,20 +80,59 @@ jobs:
         if: steps.version_check.outputs.changed == 'true' && steps.tag_check.outputs.exists != 'true'
         run: dotnet restore SoundMonitor.csproj
 
-      - name: Publish framework-dependent
-        if: steps.version_check.outputs.changed == 'true' && steps.tag_check.outputs.exists != 'true'
-        run: dotnet publish SoundMonitor.csproj --configuration ${{ env.CONFIGURATION }} --output ./publish --self-contained false
-
-      - name: Publish self-contained (win-x64)
+      - name: Publish self-contained single-file (win-x64)
         if: steps.version_check.outputs.changed == 'true' && steps.tag_check.outputs.exists != 'true'
         run: dotnet publish SoundMonitor.csproj --configuration ${{ env.CONFIGURATION }} --output ./publish-win-x64 --runtime win-x64 --self-contained true -p:PublishSingleFile=true
+
+      - name: Install Inno Setup
+        if: steps.version_check.outputs.changed == 'true' && steps.tag_check.outputs.exists != 'true'
+        shell: pwsh
+        run: choco install innosetup --no-progress -y
+
+      - name: Build installer executable
+        if: steps.version_check.outputs.changed == 'true' && steps.tag_check.outputs.exists != 'true'
+        shell: pwsh
+        run: |
+          $version = '${{ steps.version_check.outputs.current }}'
+          $iss = @"
+          #define MyAppName "SoundMonitor"
+          #define MyAppVersion "$version"
+          #define MyAppExeName "SoundMonitor.exe"
+
+          [Setup]
+          AppId={{A0AEE4E7-DA06-4688-87E2-42F11F66B4E8}
+          AppName={#MyAppName}
+          AppVersion={#MyAppVersion}
+          DefaultDirName={autopf}\{#MyAppName}
+          DefaultGroupName={#MyAppName}
+          OutputDir=.
+          OutputBaseFilename=SoundMonitor-win-x64-setup
+          Compression=lzma
+          SolidCompression=yes
+          WizardStyle=modern
+
+          [Files]
+          Source: "publish-win-x64\SoundMonitor.exe"; DestDir: "{app}"; Flags: ignoreversion
+
+          [Tasks]
+          Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Additional icons:"
+
+          [Icons]
+          Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
+          Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
+
+          [Run]
+          Filename: "{app}\{#MyAppExeName}"; Description: "Launch SoundMonitor"; Flags: nowait postinstall skipifsilent
+          "@
+
+          Set-Content -Path ./installer.iss -Value $iss -Encoding UTF8
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" ./installer.iss
 
       - name: Package release artifacts
         if: steps.version_check.outputs.changed == 'true' && steps.tag_check.outputs.exists != 'true'
         shell: pwsh
         run: |
-          Compress-Archive -Path ./publish/* -DestinationPath ./SoundMonitor-${{ steps.version_check.outputs.current }}-framework-dependent.zip -Force
-          Compress-Archive -Path ./publish-win-x64/* -DestinationPath ./SoundMonitor-${{ steps.version_check.outputs.current }}-win-x64-self-contained.zip -Force
+          Copy-Item ./publish-win-x64/SoundMonitor.exe ./SoundMonitor-win-x64-self-contained.exe -Force
 
       - name: Create GitHub release
         if: steps.version_check.outputs.changed == 'true' && steps.tag_check.outputs.exists != 'true'
@@ -103,8 +142,8 @@ jobs:
           name: Release ${{ steps.tag_check.outputs.tag }}
           generate_release_notes: true
           files: |
-            ./SoundMonitor-${{ steps.version_check.outputs.current }}-framework-dependent.zip
-            ./SoundMonitor-${{ steps.version_check.outputs.current }}-win-x64-self-contained.zip
+            ./SoundMonitor-win-x64-self-contained.exe
+            ./SoundMonitor-win-x64-setup.exe
 
       - name: Release summary
         shell: pwsh

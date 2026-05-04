@@ -192,16 +192,16 @@
         <Border Grid.Row="3" Style="{StaticResource CardBorder}">
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                 <Border Background="#4CAF50" CornerRadius="3" Padding="10,5" Margin="0,0,10,0">
-                    <TextBlock Text="安静 0-30dB" Foreground="White" FontWeight="Bold"/>
+                    <TextBlock Text="{Binding QuietRangeText}" Foreground="White" FontWeight="Bold"/>
                 </Border>
                 <Border Background="#2196F3" CornerRadius="3" Padding="10,5" Margin="0,0,10,0">
-                    <TextBlock Text="正常 30-50dB" Foreground="White" FontWeight="Bold"/>
+                    <TextBlock Text="{Binding NormalRangeText}" Foreground="White" FontWeight="Bold"/>
                 </Border>
                 <Border Background="#FF9800" CornerRadius="3" Padding="10,5" Margin="0,0,10,0">
-                    <TextBlock Text="嘈杂 50-70dB" Foreground="White" FontWeight="Bold"/>
+                    <TextBlock Text="{Binding LoudRangeText}" Foreground="White" FontWeight="Bold"/>
                 </Border>
                 <Border Background="#F44336" CornerRadius="3" Padding="10,5">
-                    <TextBlock Text="危险 70+dB" Foreground="White" FontWeight="Bold"/>
+                    <TextBlock Text="{Binding DangerRangeText}" Foreground="White" FontWeight="Bold"/>
                 </Border>
             </StackPanel>
         </Border>
