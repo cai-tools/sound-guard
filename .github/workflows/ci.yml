@@ -31,24 +31,68 @@ jobs:
       - name: Build
         run: dotnet build SoundMonitor.csproj --configuration ${{ env.CONFIGURATION }} --no-restore
 
-      - name: Publish framework-dependent (win-x64)
-        run: dotnet publish SoundMonitor.csproj --configuration ${{ env.CONFIGURATION }} --output ./publish-framework --runtime win-x64 --self-contained false
-
       - name: Publish self-contained single-file (win-x64)
         run: dotnet publish SoundMonitor.csproj --configuration ${{ env.CONFIGURATION }} --output ./publish-win-x64 --runtime win-x64 --self-contained true -p:PublishSingleFile=true
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup --no-progress -y
+
+      - name: Build installer executable
+        shell: pwsh
+        run: |
+          $content = Get-Content -Raw "SoundMonitor.csproj"
+          $versionMatch = [regex]::Match($content, '<Version>([^<]+)</Version>')
+          if (-not $versionMatch.Success) {
+            throw "Version not found in SoundMonitor.csproj"
+          }
+
+          $version = $versionMatch.Groups[1].Value.Trim()
+          $iss = @"
+          #define MyAppName "SoundMonitor"
+          #define MyAppVersion "$version"
+          #define MyAppExeName "SoundMonitor.exe"
+
+          [Setup]
+          AppId={{A0AEE4E7-DA06-4688-87E2-42F11F66B4E8}
+          AppName={#MyAppName}
+          AppVersion={#MyAppVersion}
+          DefaultDirName={autopf}\{#MyAppName}
+          DefaultGroupName={#MyAppName}
+          OutputDir=artifacts
+          OutputBaseFilename=SoundMonitor-win-x64-setup
+          Compression=lzma
+          SolidCompression=yes
+          WizardStyle=modern
+
+          [Files]
+          Source: "publish-win-x64\SoundMonitor.exe"; DestDir: "{app}"; Flags: ignoreversion
+
+          [Tasks]
+          Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Additional icons:"
+
+          [Icons]
+          Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
+          Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
+
+          [Run]
+          Filename: "{app}\{#MyAppExeName}"; Description: "Launch SoundMonitor"; Flags: nowait postinstall skipifsilent
+          "@
+
+          Set-Content -Path ./installer.iss -Value $iss -Encoding UTF8
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" ./installer.iss
 
       - name: Package executable artifacts
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Path ./artifacts -Force | Out-Null
           Copy-Item ./publish-win-x64/SoundMonitor.exe ./artifacts/SoundMonitor-win-x64-self-contained.exe -Force
-          Compress-Archive -Path ./publish-framework/* -DestinationPath ./artifacts/SoundMonitor-win-x64-framework-dependent.zip -Force
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v7
         with:
           name: SoundMonitor-executable-artifacts
-          path: ./artifacts/*
+          path: ./artifacts/*.exe
           retention-days: 30
 
   comment-pr-artifacts:
@@ -58,6 +102,7 @@ jobs:
 
     steps:
       - name: Comment artifact links to PR
+        continue-on-error: true
         uses: actions/github-script@v9
         with:
           script: |
@@ -97,26 +142,30 @@ jobs:
               ...lines,
             ].join('\n');
 
-            const comments = await github.paginate(github.rest.issues.listComments, {
-              owner,
-              repo,
-              issue_number: prNumber,
-              per_page: 100,
-            });
-
-            const existing = comments.find(c => c.user?.type === 'Bot' && c.body?.includes(marker));
-            if (existing) {
-              await github.rest.issues.updateComment({
-                owner,
-                repo,
-                comment_id: existing.id,
-                body,
-              });
-            } else {
-              await github.rest.issues.createComment({
+            try {
+              const comments = await github.paginate(github.rest.issues.listComments, {
                 owner,
                 repo,
                 issue_number: prNumber,
-                body,
+                per_page: 100,
               });
+
+              const existing = comments.find(c => c.user?.type === 'Bot' && c.body?.includes(marker));
+              if (existing) {
+                await github.rest.issues.updateComment({
+                  owner,
+                  repo,
+                  comment_id: existing.id,
+                  body,
+                });
+              } else {
+                await github.rest.issues.createComment({
+                  owner,
+                  repo,
+                  issue_number: prNumber,
+                  body,
+                });
+              }
+            } catch (error) {
+              core.warning(`Unable to post PR artifact comment: ${error?.message || error}`);
             }
