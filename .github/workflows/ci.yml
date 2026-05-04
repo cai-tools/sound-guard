@@ -88,11 +88,18 @@ jobs:
           New-Item -ItemType Directory -Path ./artifacts -Force | Out-Null
           Copy-Item ./publish-win-x64/SoundMonitor.exe ./artifacts/SoundMonitor-win-x64-self-contained.exe -Force
 
-      - name: Upload artifacts
+      - name: Upload self-contained exe artifact
         uses: actions/upload-artifact@v7
         with:
-          name: SoundMonitor-executable-artifacts
-          path: ./artifacts/*.exe
+          name: SoundMonitor-win-x64-self-contained.exe
+          path: ./artifacts/SoundMonitor-win-x64-self-contained.exe
+          retention-days: 30
+
+      - name: Upload installer exe artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: SoundMonitor-win-x64-setup.exe
+          path: ./artifacts/SoundMonitor-win-x64-setup.exe
           retention-days: 30
 
   comment-pr-artifacts:
