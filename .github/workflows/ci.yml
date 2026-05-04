@@ -31,46 +31,30 @@ jobs:
       - name: Build
         run: dotnet build SoundMonitor.csproj --configuration ${{ env.CONFIGURATION }} --no-restore
 
-      - name: Publish
-        run: dotnet publish SoundMonitor.csproj --configuration ${{ env.CONFIGURATION }} --output ./publish --self-contained false
+      - name: Publish framework-dependent (win-x64)
+        run: dotnet publish SoundMonitor.csproj --configuration ${{ env.CONFIGURATION }} --output ./publish-framework --runtime win-x64 --self-contained false
 
-      - name: Upload artifacts
-        id: upload_framework_dependent
-        uses: actions/upload-artifact@v7
-        with:
-          name: SoundMonitor-${{ runner.os }}
-          path: ./publish/**/*
-          retention-days: 30
-
-  build-self-contained:
-    runs-on: windows-latest
-    
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v5
-        with:
-          dotnet-version: ${{ env.DOTNET_VERSION }}
-
-      - name: Publish self-contained (win-x64)
+      - name: Publish self-contained single-file (win-x64)
         run: dotnet publish SoundMonitor.csproj --configuration ${{ env.CONFIGURATION }} --output ./publish-win-x64 --runtime win-x64 --self-contained true -p:PublishSingleFile=true
 
+      - name: Package executable artifacts
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path ./artifacts -Force | Out-Null
+          Copy-Item ./publish-win-x64/SoundMonitor.exe ./artifacts/SoundMonitor-win-x64-self-contained.exe -Force
+          Compress-Archive -Path ./publish-framework/* -DestinationPath ./artifacts/SoundMonitor-win-x64-framework-dependent.zip -Force
+
       - name: Upload artifacts
-        id: upload_self_contained
         uses: actions/upload-artifact@v7
         with:
-          name: SoundMonitor-win-x64-self-contained
-          path: ./publish-win-x64/**/*
+          name: SoundMonitor-executable-artifacts
+          path: ./artifacts/*
           retention-days: 30
 
   comment-pr-artifacts:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
-    needs:
-      - build
-      - build-self-contained
+    needs: build
 
     steps:
       - name: Comment artifact links to PR
@@ -106,7 +90,7 @@ jobs:
 
             const body = [
               marker,
-              '### Build Artifacts',
+              '### Build Artifacts (Executable / Installer Package)',
               '',
               `Workflow run: https://github.com/${owner}/${repo}/actions/runs/${runId}`,
               '',
