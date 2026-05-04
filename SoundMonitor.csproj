@@ -8,7 +8,7 @@
     <UseWPF>true</UseWPF>
     <AssemblyName>SoundMonitor</AssemblyName>
     <RootNamespace>SoundMonitor</RootNamespace>
-    <Version>1.0.0</Version>
+    <Version>0.0.1</Version>
     <Authors>Developer</Authors>
     <Description>麦克风分贝监控应用 - 实时监听麦克风并显示分贝曲线，支持多级阈值警告</Description>
     <WindowsPackageType>None</WindowsPackageType>
