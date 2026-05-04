@@ -59,11 +59,13 @@ public class AudioCaptureService : IDisposable
 
                 _waveIn.StartRecording();
                 _isCapturing = true;
+                AppLogger.Info($"录音启动成功，设备编号: {targetDevice}, 采样率: {sampleRate}");
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"启动录音失败: {ex.Message}");
                 _isCapturing = false;
+                AppLogger.Error("录音启动失败", ex);
             }
         }
     }
@@ -81,8 +83,12 @@ public class AudioCaptureService : IDisposable
                 {
                     _waveIn.StopRecording();
                     _waveIn.Dispose();
+                    AppLogger.Info("录音停止成功");
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    AppLogger.Error("录音停止时发生异常", ex);
+                }
                 _waveIn = null;
             }
             _isCapturing = false;

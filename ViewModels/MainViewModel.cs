@@ -1,5 +1,4 @@
 using System.Collections.ObjectModel;
-using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using LiveChartsCore;
@@ -20,7 +19,6 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private readonly AudioCaptureService _audioService;
     private readonly NotificationService _notificationService;
     private readonly ThresholdConfig _thresholdConfig;
-    private readonly DispatcherTimer _timer;
     private readonly ObservableCollection<ObservableValue> _decibelValues;
     private const int MaxDataPoints = 100;
 
@@ -37,9 +35,6 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private string _levelText = "安静";
 
     [ObservableProperty]
-    private string _selectedDevice = "默认麦克风";
-
-    [ObservableProperty]
     private bool _isMonitoring;
 
     [ObservableProperty]
@@ -52,6 +47,11 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private int _selectedDeviceIndex;
 
     public ObservableCollection<string> Devices { get; } = new();
+
+    public string QuietRangeText => $"安静 0-{_thresholdConfig.QuietMax:F0}dB";
+    public string NormalRangeText => $"正常 {_thresholdConfig.QuietMax:F0}-{_thresholdConfig.NormalMax:F0}dB";
+    public string LoudRangeText => $"嘈杂 {_thresholdConfig.NormalMax:F0}-{_thresholdConfig.LoudMax:F0}dB";
+    public string DangerRangeText => $"危险 {_thresholdConfig.LoudMax:F0}+dB";
 
     public ISeries[] Series { get; }
 
@@ -83,6 +83,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
     public MainViewModel()
     {
+        AppLogger.Initialize();
         _audioService = new AudioCaptureService();
         _notificationService = new NotificationService();
         _thresholdConfig = new ThresholdConfig();
@@ -105,12 +106,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
             }
         };
 
-        _timer = new DispatcherTimer
-        {
-            Interval = TimeSpan.FromMilliseconds(100)
-        };
-
         LoadDevices();
+        AppLogger.Info("主视图模型初始化完成");
     }
 
     /// <summary>
@@ -135,6 +132,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         }
 
         SelectedDeviceIndex = 0;
+        AppLogger.Info($"设备加载完成，可用输入设备数量: {Devices.Count - 1}");
     }
 
     [RelayCommand]
@@ -167,35 +165,36 @@ public partial class MainViewModel : ObservableObject, IDisposable
         {
             IsMonitoring = false;
             StatusText = "启动失败：请检查麦克风设备或权限";
+            AppLogger.Warn($"开始监控失败，设备索引: {deviceNumber}");
             return;
         }
 
-        _timer.Start();
         IsMonitoring = true;
         StatusText = "正在监控...";
+        AppLogger.Info($"开始监控，设备索引: {deviceNumber}");
     }
 
     [RelayCommand]
     private void StopMonitoring()
     {
-        _timer.Stop();
         _audioService.Stop();
         IsMonitoring = false;
         StatusText = "已停止";
+        AppLogger.Info("停止监控");
     }
 
     private void OnAudioDataAvailable(byte[] buffer, int bytesRecorded)
     {
         if (bytesRecorded <= 0) return;
 
-        var effectiveBuffer = new byte[bytesRecorded];
-        Array.Copy(buffer, effectiveBuffer, bytesRecorded);
-
         // 分贝计算在 UI 线程外完成
-        double db = DecibelCalculator.CalculateDecibel(effectiveBuffer, 2);
+        double db = DecibelCalculator.CalculateDecibel(buffer, 2, bytesRecorded);
 
-        // 更新到 UI（需要 Dispatcher）
-        App.Current?.Dispatcher.Invoke(() =>
+        // 异步更新 UI，避免阻塞采集回调线程。
+        var dispatcher = App.Current?.Dispatcher;
+        if (dispatcher == null) return;
+
+        dispatcher.BeginInvoke(() =>
         {
             CurrentDecibel = db;
             UpdateLevel(db);
@@ -232,15 +231,17 @@ public partial class MainViewModel : ObservableObject, IDisposable
         // 触发通知
         _notificationService.ShowDecibelNotification(decibel, newLevel);
 
-        if (decibel >= 50 && DateTime.Now - _lastInAppAlertTime >= _inAppAlertCooldown)
+        bool isWarningLevel = newLevel >= _thresholdConfig.WarningLevel;
+        var now = DateTime.UtcNow;
+        if (isWarningLevel && now - _lastInAppAlertTime >= _inAppAlertCooldown)
         {
-            _lastInAppAlertTime = DateTime.Now;
+            _lastInAppAlertTime = now;
             AlertText = newLevel == ThresholdLevel.Danger
                 ? $"危险提醒: {decibel:F1} dB"
                 : $"嘈杂提醒: {decibel:F1} dB";
             IsAlertVisible = true;
         }
-        else if (decibel < 50)
+        else if (!isWarningLevel)
         {
             IsAlertVisible = false;
         }
@@ -249,7 +250,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
     public void Dispose()
     {
         StopMonitoring();
+        _notificationService.Dispose();
         _audioService.Dispose();
-        _timer.Stop();
+        AppLogger.Info("主视图模型释放完成");
     }
 }
