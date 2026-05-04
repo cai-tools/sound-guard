@@ -1,0 +1,120 @@
+name: Release On Version Change
+
+on:
+  push:
+    branches: [main]
+
+env:
+  DOTNET_VERSION: '8.0.x'
+  CONFIGURATION: Release
+
+permissions:
+  contents: write
+
+jobs:
+  release-on-version-change:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 2
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Check version changed
+        id: version_check
+        shell: pwsh
+        run: |
+          $currentContent = Get-Content -Raw "SoundMonitor.csproj"
+          $currentMatch = [regex]::Match($currentContent, '<Version>([^<]+)</Version>')
+          if (-not $currentMatch.Success) {
+            throw "Current version not found in SoundMonitor.csproj"
+          }
+
+          $currentVersion = $currentMatch.Groups[1].Value.Trim()
+          $changed = $false
+          $previousVersion = ''
+
+          try {
+            $previousContent = git show HEAD~1:SoundMonitor.csproj
+            if ($LASTEXITCODE -eq 0 -and $previousContent) {
+              $previousMatch = [regex]::Match(($previousContent -join "`n"), '<Version>([^<]+)</Version>')
+              if ($previousMatch.Success) {
+                $previousVersion = $previousMatch.Groups[1].Value.Trim()
+                if ($currentVersion -ne $previousVersion) {
+                  $changed = $true
+                }
+              }
+            }
+          }
+          catch {
+            Write-Host "No previous commit version found."
+          }
+
+          "current=$currentVersion" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "previous=$previousVersion" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "changed=$changed" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Check release tag exists
+        id: tag_check
+        if: steps.version_check.outputs.changed == 'true'
+        shell: pwsh
+        run: |
+          $tag = "v${{ steps.version_check.outputs.current }}"
+          git fetch --tags
+
+          $exists = $false
+          if (git rev-parse -q --verify "refs/tags/$tag") {
+            $exists = $true
+          }
+
+          "tag=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "exists=$exists" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Restore dependencies
+        if: steps.version_check.outputs.changed == 'true' && steps.tag_check.outputs.exists != 'true'
+        run: dotnet restore SoundMonitor.csproj
+
+      - name: Publish framework-dependent
+        if: steps.version_check.outputs.changed == 'true' && steps.tag_check.outputs.exists != 'true'
+        run: dotnet publish SoundMonitor.csproj --configuration ${{ env.CONFIGURATION }} --output ./publish --self-contained false
+
+      - name: Publish self-contained (win-x64)
+        if: steps.version_check.outputs.changed == 'true' && steps.tag_check.outputs.exists != 'true'
+        run: dotnet publish SoundMonitor.csproj --configuration ${{ env.CONFIGURATION }} --output ./publish-win-x64 --runtime win-x64 --self-contained true -p:PublishSingleFile=true
+
+      - name: Package release artifacts
+        if: steps.version_check.outputs.changed == 'true' && steps.tag_check.outputs.exists != 'true'
+        shell: pwsh
+        run: |
+          Compress-Archive -Path ./publish/* -DestinationPath ./SoundMonitor-${{ steps.version_check.outputs.current }}-framework-dependent.zip -Force
+          Compress-Archive -Path ./publish-win-x64/* -DestinationPath ./SoundMonitor-${{ steps.version_check.outputs.current }}-win-x64-self-contained.zip -Force
+
+      - name: Create GitHub release
+        if: steps.version_check.outputs.changed == 'true' && steps.tag_check.outputs.exists != 'true'
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ steps.tag_check.outputs.tag }}
+          name: Release ${{ steps.tag_check.outputs.tag }}
+          generate_release_notes: true
+          files: |
+            ./SoundMonitor-${{ steps.version_check.outputs.current }}-framework-dependent.zip
+            ./SoundMonitor-${{ steps.version_check.outputs.current }}-win-x64-self-contained.zip
+
+      - name: Release summary
+        shell: pwsh
+        run: |
+          if ('${{ steps.version_check.outputs.changed }}' -ne 'true') {
+            Write-Host "Version unchanged. Skip release."
+          }
+          elseif ('${{ steps.tag_check.outputs.exists }}' -eq 'true') {
+            Write-Host "Release tag already exists: ${{ steps.tag_check.outputs.tag }}. Skip release."
+          }
+          else {
+            Write-Host "Release published: ${{ steps.tag_check.outputs.tag }}"
+          }
