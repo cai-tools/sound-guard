@@ -48,28 +48,64 @@ public static class DecibelCalculator
     /// </summary>
     public static double CalculateDecibel(byte[] audioData, int bytesPerSample)
     {
-        if (audioData == null || audioData.Length == 0)
+        if (audioData == null)
             return 0;
 
-        var samples = new float[audioData.Length / bytesPerSample];
+        return CalculateDecibel(audioData, bytesPerSample, audioData.Length);
+    }
 
-        for (int i = 0; i < samples.Length; i++)
+    /// <summary>
+    /// 计算分贝值（从字节数组）
+    /// </summary>
+    /// <param name="audioData">音频字节数据</param>
+    /// <param name="bytesPerSample">每个采样占用字节数</param>
+    /// <param name="bytesRecorded">本次实际写入的字节数</param>
+    public static double CalculateDecibel(byte[] audioData, int bytesPerSample, int bytesRecorded)
+    {
+        if (audioData == null || audioData.Length == 0 || bytesRecorded <= 0 || bytesPerSample <= 0)
+            return 0;
+
+        int effectiveBytes = Math.Min(bytesRecorded, audioData.Length);
+        int sampleCount = effectiveBytes / bytesPerSample;
+        if (sampleCount <= 0)
+            return 0;
+
+        double sum = 0;
+
+        if (bytesPerSample == 2)
         {
-            if (bytesPerSample == 2)
+            int offset = 0;
+            for (int i = 0; i < sampleCount; i++)
             {
-                // 16位采样
-                short sample = (short)(audioData[i * 2] | (audioData[i * 2 + 1] << 8));
-                samples[i] = sample / 32768f;
-            }
-            else if (bytesPerSample == 4)
-            {
-                // 32位采样
-                int sample = audioData[i * 4] | (audioData[i * 4 + 1] << 8) |
-                             (audioData[i * 4 + 2] << 16) | (audioData[i * 4 + 3] << 24);
-                samples[i] = BitConverter.Int32BitsToSingle(sample);
+                short sample = (short)(audioData[offset] | (audioData[offset + 1] << 8));
+                double normalized = sample / 32768d;
+                sum += normalized * normalized;
+                offset += 2;
             }
         }
+        else if (bytesPerSample == 4)
+        {
+            int offset = 0;
+            for (int i = 0; i < sampleCount; i++)
+            {
+                int sampleBits = audioData[offset] | (audioData[offset + 1] << 8) |
+                                 (audioData[offset + 2] << 16) | (audioData[offset + 3] << 24);
+                double normalized = BitConverter.Int32BitsToSingle(sampleBits);
+                sum += normalized * normalized;
+                offset += 4;
+            }
+        }
+        else
+        {
+            return 0;
+        }
 
-        return CalculateDecibel(samples);
+        double rms = Math.Sqrt(sum / sampleCount);
+        if (rms < 1e-10)
+            return 0;
+
+        double db = 20 * Math.Log10(rms);
+        db = Math.Max(0, db + DisplayOffset);
+        return Math.Min(120, db);
     }
 }
