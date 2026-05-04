@@ -106,7 +106,7 @@ jobs:
           DefaultDirName={autopf}\{#MyAppName}
           DefaultGroupName={#MyAppName}
           OutputDir=.
-          OutputBaseFilename=SoundMonitor-${{ steps.version_check.outputs.current }}-win-x64-setup
+          OutputBaseFilename=SoundMonitor-win-x64-setup
           Compression=lzma
           SolidCompression=yes
           WizardStyle=modern
@@ -132,7 +132,7 @@ jobs:
         if: steps.version_check.outputs.changed == 'true' && steps.tag_check.outputs.exists != 'true'
         shell: pwsh
         run: |
-          Copy-Item ./publish-win-x64/SoundMonitor.exe ./SoundMonitor-${{ steps.version_check.outputs.current }}-win-x64-self-contained.exe -Force
+          Copy-Item ./publish-win-x64/SoundMonitor.exe ./SoundMonitor-win-x64-self-contained.exe -Force
 
       - name: Create GitHub release
         if: steps.version_check.outputs.changed == 'true' && steps.tag_check.outputs.exists != 'true'
@@ -142,8 +142,8 @@ jobs:
           name: Release ${{ steps.tag_check.outputs.tag }}
           generate_release_notes: true
           files: |
-            ./SoundMonitor-${{ steps.version_check.outputs.current }}-win-x64-self-contained.exe
-            ./SoundMonitor-${{ steps.version_check.outputs.current }}-win-x64-setup.exe
+            ./SoundMonitor-win-x64-self-contained.exe
+            ./SoundMonitor-win-x64-setup.exe
 
       - name: Release summary
         shell: pwsh
