@@ -129,9 +129,18 @@ jobs:
               });
 
               const artifacts = data.artifacts || [];
-              lines = artifacts.length
-                ? artifacts.map(a => `- [${a.name}](https://github.com/${owner}/${repo}/actions/runs/${runId}/artifacts/${a.id}) (expires: ${a.expires_at})`)
-                : ['- No artifacts found in this run.'];
+              const targetArtifactNames = [
+                'SoundMonitor-win-x64-self-contained.exe',
+                'SoundMonitor-win-x64-setup.exe',
+              ];
+
+              const targetArtifacts = targetArtifactNames
+                .map(name => artifacts.find(a => a.name === name))
+                .filter(Boolean);
+
+              lines = targetArtifacts.length
+                ? targetArtifacts.map(a => `- [${a.name}](https://github.com/${owner}/${repo}/actions/runs/${runId}/artifacts/${a.id}) (expires: ${a.expires_at})`)
+                : ['- Target executable artifacts are not found in this run.'];
             } catch (error) {
               lines = [
                 '- Unable to list artifacts in this context (token permission is limited).',
