@@ -8,7 +8,8 @@ env:
   CONFIGURATION: Release
 
 permissions:
-  contents: write
+  contents: read
+  actions: read
   pull-requests: write
 
 jobs:
@@ -82,17 +83,26 @@ jobs:
             const prNumber = context.payload.pull_request.number;
             const marker = '<!-- sound-guard-artifacts -->';
 
-            const { data } = await github.rest.actions.listWorkflowRunArtifacts({
-              owner,
-              repo,
-              run_id: runId,
-              per_page: 100,
-            });
+            let lines = ['- No artifacts found in this run.'];
+            try {
+              const { data } = await github.rest.actions.listWorkflowRunArtifacts({
+                owner,
+                repo,
+                run_id: runId,
+                per_page: 100,
+              });
 
-            const artifacts = data.artifacts || [];
-            const lines = artifacts.length
-              ? artifacts.map(a => `- [${a.name}](https://github.com/${owner}/${repo}/actions/runs/${runId}/artifacts/${a.id}) (expires: ${a.expires_at})`)
-              : ['- No artifacts found in this run.'];
+              const artifacts = data.artifacts || [];
+              lines = artifacts.length
+                ? artifacts.map(a => `- [${a.name}](https://github.com/${owner}/${repo}/actions/runs/${runId}/artifacts/${a.id}) (expires: ${a.expires_at})`)
+                : ['- No artifacts found in this run.'];
+            } catch (error) {
+              lines = [
+                '- Unable to list artifacts in this context (token permission is limited).',
+                '- Open the workflow run page to download artifacts directly.',
+              ];
+              core.warning(`Artifact listing skipped: ${error?.message || error}`);
+            }
 
             const body = [
               marker,
