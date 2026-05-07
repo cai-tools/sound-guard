@@ -1,4 +1,7 @@
 using System.Collections.ObjectModel;
+using System.Diagnostics;
+using System.Globalization;
+using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using LiveChartsCore;
@@ -45,6 +48,21 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
     [ObservableProperty]
     private int _selectedDeviceIndex;
+
+    [ObservableProperty]
+    private bool _isSettingsOpen;
+
+    [ObservableProperty]
+    private string _quietMaxInput = string.Empty;
+
+    [ObservableProperty]
+    private string _normalMaxInput = string.Empty;
+
+    [ObservableProperty]
+    private string _loudMaxInput = string.Empty;
+
+    [ObservableProperty]
+    private int _notificationThresholdIndex;
 
     public ObservableCollection<string> Devices { get; } = new();
 
@@ -107,7 +125,16 @@ public partial class MainViewModel : ObservableObject, IDisposable
         };
 
         LoadDevices();
+        InitializeSettingsInputs();
         AppLogger.Info("主视图模型初始化完成");
+    }
+
+    private void InitializeSettingsInputs()
+    {
+        QuietMaxInput = _thresholdConfig.QuietMax.ToString("F0", CultureInfo.InvariantCulture);
+        NormalMaxInput = _thresholdConfig.NormalMax.ToString("F0", CultureInfo.InvariantCulture);
+        LoudMaxInput = _thresholdConfig.LoudMax.ToString("F0", CultureInfo.InvariantCulture);
+        NotificationThresholdIndex = GetThresholdIndex(_thresholdConfig.WarningLevel);
     }
 
     /// <summary>
@@ -131,7 +158,19 @@ public partial class MainViewModel : ObservableObject, IDisposable
             }
         }
 
+        // 优先选择麦克风阵列（中英文名称），未找到则回退到系统默认设备。
         SelectedDeviceIndex = 0;
+        for (int i = 1; i < Devices.Count; i++)
+        {
+            var name = Devices[i];
+            if (name.Contains("麦克风阵列", StringComparison.OrdinalIgnoreCase) ||
+                name.Contains("microphone array", StringComparison.OrdinalIgnoreCase))
+            {
+                SelectedDeviceIndex = i;
+                break;
+            }
+        }
+
         AppLogger.Info($"设备加载完成，可用输入设备数量: {Devices.Count - 1}");
     }
 
@@ -183,6 +222,100 @@ public partial class MainViewModel : ObservableObject, IDisposable
         AppLogger.Info("停止监控");
     }
 
+    [RelayCommand]
+    private void OpenLog()
+    {
+        try
+        {
+            AppLogger.Initialize();
+            var logPath = AppLogger.CurrentLogFilePath;
+
+            if (!File.Exists(logPath))
+            {
+                File.WriteAllText(logPath, string.Empty);
+            }
+
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = logPath,
+                UseShellExecute = true
+            });
+
+            StatusText = "已打开日志";
+        }
+        catch (Exception ex)
+        {
+            StatusText = "打开日志失败";
+            AppLogger.Error("打开日志失败", ex);
+        }
+    }
+
+    [RelayCommand]
+    private void ToggleSettings()
+    {
+        IsSettingsOpen = !IsSettingsOpen;
+    }
+
+    [RelayCommand]
+    private void ApplySettings()
+    {
+        if (!TryParseInput(QuietMaxInput, out var quietMax) ||
+            !TryParseInput(NormalMaxInput, out var normalMax) ||
+            !TryParseInput(LoudMaxInput, out var loudMax))
+        {
+            StatusText = "设置无效：请输入有效数字";
+            AppLogger.Warn("应用设置失败：分段阈值存在无效输入");
+            return;
+        }
+
+        if (!(quietMax > 0 && quietMax < normalMax && normalMax < loudMax && loudMax <= 120))
+        {
+            StatusText = "设置无效：请确保 0 < 安静 < 正常 < 嘈杂 <= 120";
+            AppLogger.Warn($"应用设置失败：阈值顺序错误，quiet={quietMax}, normal={normalMax}, loud={loudMax}");
+            return;
+        }
+
+        _thresholdConfig.QuietMax = quietMax;
+        _thresholdConfig.NormalMax = normalMax;
+        _thresholdConfig.LoudMax = loudMax;
+        _thresholdConfig.WarningLevel = GetThresholdLevelFromIndex(NotificationThresholdIndex);
+
+        OnPropertyChanged(nameof(QuietRangeText));
+        OnPropertyChanged(nameof(NormalRangeText));
+        OnPropertyChanged(nameof(LoudRangeText));
+        OnPropertyChanged(nameof(DangerRangeText));
+
+        StatusText = "设置已应用";
+        AppLogger.Info(
+            $"设置已更新，quiet={quietMax:F0}, normal={normalMax:F0}, loud={loudMax:F0}, notify={_thresholdConfig.WarningLevel}");
+    }
+
+    private static bool TryParseInput(string input, out double value)
+    {
+        return double.TryParse(input, NumberStyles.Float, CultureInfo.CurrentCulture, out value) ||
+               double.TryParse(input, NumberStyles.Float, CultureInfo.InvariantCulture, out value);
+    }
+
+    private static ThresholdLevel GetThresholdLevelFromIndex(int index)
+    {
+        return index switch
+        {
+            0 => ThresholdLevel.Normal,
+            2 => ThresholdLevel.Danger,
+            _ => ThresholdLevel.Loud
+        };
+    }
+
+    private static int GetThresholdIndex(ThresholdLevel level)
+    {
+        return level switch
+        {
+            ThresholdLevel.Normal => 0,
+            ThresholdLevel.Danger => 2,
+            _ => 1
+        };
+    }
+
     private void OnAudioDataAvailable(byte[] buffer, int bytesRecorded)
     {
         if (bytesRecorded <= 0) return;
@@ -229,16 +362,19 @@ public partial class MainViewModel : ObservableObject, IDisposable
         }
 
         // 触发通知
-        _notificationService.ShowDecibelNotification(decibel, newLevel);
+        _notificationService.ShowDecibelNotification(decibel, newLevel, _thresholdConfig.WarningLevel);
 
         bool isWarningLevel = newLevel >= _thresholdConfig.WarningLevel;
         var now = DateTime.UtcNow;
         if (isWarningLevel && now - _lastInAppAlertTime >= _inAppAlertCooldown)
         {
             _lastInAppAlertTime = now;
-            AlertText = newLevel == ThresholdLevel.Danger
-                ? $"危险提醒: {decibel:F1} dB"
-                : $"嘈杂提醒: {decibel:F1} dB";
+            AlertText = newLevel switch
+            {
+                ThresholdLevel.Danger => $"危险提醒: {decibel:F1} dB",
+                ThresholdLevel.Loud => $"嘈杂提醒: {decibel:F1} dB",
+                _ => $"音量提醒: {decibel:F1} dB"
+            };
             IsAlertVisible = true;
         }
         else if (!isWarningLevel)

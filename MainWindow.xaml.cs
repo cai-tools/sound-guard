@@ -12,10 +12,20 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         DataContext = new MainViewModel();
+        Loaded += OnLoaded;
+    }
+
+    private void OnLoaded(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is MainViewModel vm && !vm.IsMonitoring)
+        {
+            vm.StartMonitoringCommand.Execute(null);
+        }
     }
 
     protected override void OnClosed(EventArgs e)
     {
+        Loaded -= OnLoaded;
         if (DataContext is MainViewModel vm)
         {
             vm.Dispose();
