@@ -82,7 +82,7 @@ jobs:
 
       - name: Publish self-contained single-file (win-x64)
         if: steps.version_check.outputs.changed == 'true' && steps.tag_check.outputs.exists != 'true'
-        run: dotnet publish SoundMonitor.csproj --configuration ${{ env.CONFIGURATION }} --output ./publish-win-x64 --runtime win-x64 --self-contained true -p:PublishSingleFile=true
+        run: dotnet publish SoundMonitor.csproj --configuration ${{ env.CONFIGURATION }} --output ./publish-win-x64 --runtime win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -p:DebugType=None -p:DebugSymbols=false
 
       - name: Install Inno Setup
         if: steps.version_check.outputs.changed == 'true' && steps.tag_check.outputs.exists != 'true'
