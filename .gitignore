@@ -25,3 +25,4 @@ tmp-ci-publish/
 tmp-single-exe/
 publish-win-x64/
 artifacts/
+dist/

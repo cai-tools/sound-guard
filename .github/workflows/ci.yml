@@ -25,20 +25,8 @@ jobs:
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
-      - name: Restore dependencies
-        run: dotnet restore SoundMonitor.csproj
-
-      - name: Build
-        run: dotnet build SoundMonitor.csproj --configuration ${{ env.CONFIGURATION }} --no-restore
-
-      - name: Publish self-contained single-file (win-x64)
-        run: dotnet publish SoundMonitor.csproj --configuration ${{ env.CONFIGURATION }} --output ./publish-win-x64 --runtime win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -p:DebugType=None -p:DebugSymbols=false
-
-      - name: Install Inno Setup
-        shell: pwsh
-        run: choco install innosetup --no-progress -y
-
-      - name: Build installer executable
+      - name: Resolve app version
+        id: version
         shell: pwsh
         run: |
           $content = Get-Content -Raw "SoundMonitor.csproj"
@@ -48,58 +36,39 @@ jobs:
           }
 
           $version = $versionMatch.Groups[1].Value.Trim()
-          $iss = @"
-          #define MyAppName "SoundMonitor"
-          #define MyAppVersion "$version"
-          #define MyAppExeName "SoundMonitor.exe"
+          "value=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
 
-          [Setup]
-          AppId={{A0AEE4E7-DA06-4688-87E2-42F11F66B4E8}
-          AppName={#MyAppName}
-          AppVersion={#MyAppVersion}
-          DefaultDirName={autopf}\{#MyAppName}
-          DefaultGroupName={#MyAppName}
-          OutputDir=artifacts
-          OutputBaseFilename=SoundMonitor-win-x64-setup
-          Compression=lzma
-          SolidCompression=yes
-          WizardStyle=modern
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup --no-progress -y
 
-          [Files]
-          Source: "publish-win-x64\SoundMonitor.exe"; DestDir: "{app}"; Flags: ignoreversion
-
-          [Tasks]
-          Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Additional icons:"
-
-          [Icons]
-          Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
-          Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
-
-          [Run]
-          Filename: "{app}\{#MyAppExeName}"; Description: "Launch SoundMonitor"; Flags: nowait postinstall skipifsilent
-          "@
-
-          Set-Content -Path ./installer.iss -Value $iss -Encoding UTF8
-          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" ./installer.iss
-
-      - name: Package executable artifacts
+      - name: Build distributable artifacts
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Path ./artifacts -Force | Out-Null
-          Copy-Item ./publish-win-x64/SoundMonitor.exe ./artifacts/SoundMonitor-win-x64-self-contained.exe -Force
+          ./scripts/build-release.ps1 -Version '${{ steps.version.outputs.value }}'
 
-      - name: Upload self-contained exe artifact
+      - name: Upload single-file exe artifact
         uses: actions/upload-artifact@v7
         with:
-          name: SoundMonitor-win-x64-self-contained.exe
-          path: ./artifacts/SoundMonitor-win-x64-self-contained.exe
+          name: SoundMonitor-win-x64-single-exe
+          path: ./dist/single-exe-win-x64/SoundMonitor.exe
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload portable zip artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: SoundMonitor-win-x64-portable-zip
+          path: ./dist/SoundMonitor-portable-win-x64-v*.zip
+          if-no-files-found: error
           retention-days: 30
 
       - name: Upload installer exe artifact
         uses: actions/upload-artifact@v7
         with:
-          name: SoundMonitor-win-x64-setup.exe
-          path: ./artifacts/SoundMonitor-win-x64-setup.exe
+          name: SoundMonitor-win-x64-setup-exe
+          path: ./dist/installer/*.exe
+          if-no-files-found: error
           retention-days: 30
 
   comment-pr-artifacts:
@@ -130,8 +99,9 @@ jobs:
 
               const artifacts = data.artifacts || [];
               const targetArtifactNames = [
-                'SoundMonitor-win-x64-self-contained.exe',
-                'SoundMonitor-win-x64-setup.exe',
+                'SoundMonitor-win-x64-single-exe',
+                'SoundMonitor-win-x64-portable-zip',
+                'SoundMonitor-win-x64-setup-exe',
               ];
 
               const targetArtifacts = targetArtifactNames
