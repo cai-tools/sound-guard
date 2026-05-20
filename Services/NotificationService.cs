@@ -1,5 +1,7 @@
 using SoundMonitor.Models;
 using System.Drawing;
+using System.Globalization;
+using System.Threading;
 using System.Windows.Forms;
 
 namespace SoundMonitor.Services;
@@ -13,6 +15,7 @@ public class NotificationService : IDisposable
     private readonly TimeSpan _notificationCooldown = TimeSpan.FromSeconds(5);
     private NotifyIcon? _notifyIcon;
     private bool _alertLatched;
+    private int _notificationCount;
 
     private NotifyIcon EnsureNotifyIcon()
     {
@@ -29,10 +32,10 @@ public class NotificationService : IDisposable
     /// <summary>
     /// 显示分贝警告通知
     /// </summary>
-    public bool ShowDecibelNotification(double decibel, ThresholdLevel level)
+    public bool ShowDecibelNotification(double decibel, ThresholdLevel level, ThresholdLevel warningLevel)
     {
         // 回落到安全级别后，重新允许下一次告警触发。
-        if (level < ThresholdLevel.Loud)
+        if (level < warningLevel)
         {
             _alertLatched = false;
             return false;
@@ -62,11 +65,18 @@ public class NotificationService : IDisposable
             var notifyIcon = EnsureNotifyIcon();
             notifyIcon.BalloonTipTitle = title;
             notifyIcon.BalloonTipText = message;
-            notifyIcon.BalloonTipIcon = level == ThresholdLevel.Danger
-                ? ToolTipIcon.Error
-                : ToolTipIcon.Warning;
+            notifyIcon.BalloonTipIcon = level switch
+            {
+                ThresholdLevel.Danger => ToolTipIcon.Error,
+                ThresholdLevel.Loud => ToolTipIcon.Warning,
+                _ => ToolTipIcon.Info
+            };
             notifyIcon.ShowBalloonTip(3000);
-            AppLogger.Warn($"触发系统通知，级别: {level}, 分贝: {decibel:F1}");
+
+            var count = Interlocked.Increment(ref _notificationCount);
+            var localTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture);
+            AppLogger.Warn(
+                $"通知事件 | 次数: {count} | 时间: {localTime} | 阈值: {warningLevel} | 级别: {level} | 分贝: {decibel:F1} dB");
         }
         catch (Exception ex)
         {

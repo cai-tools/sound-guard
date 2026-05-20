@@ -27,7 +27,7 @@ public class ThresholdConfig
     public double NormalMax { get; set; } = 60;
     public double LoudMax { get; set; } = 80;
 
-    public ThresholdLevel WarningLevel => ThresholdLevel.Loud;
+    public ThresholdLevel WarningLevel { get; set; } = ThresholdLevel.Loud;
 
     public ThresholdLevel GetLevel(double decibel)
     {

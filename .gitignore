@@ -19,3 +19,10 @@ TestResults/
 
 # NuGet packages folder (if used)
 packages/
+
+# Local publish validation outputs
+tmp-ci-publish/
+tmp-single-exe/
+publish-win-x64/
+artifacts/
+dist/

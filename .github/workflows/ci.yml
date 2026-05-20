@@ -25,81 +25,15 @@ jobs:
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
-      - name: Restore dependencies
-        run: dotnet restore SoundMonitor.csproj
+      - name: Publish single-file exe (win-x64)
+        run: dotnet publish SoundMonitor.csproj --configuration ${{ env.CONFIGURATION }} --output ./dist/single-exe-win-x64 --runtime win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -p:PublishTrimmed=false -p:DebugType=None -p:DebugSymbols=false
 
-      - name: Build
-        run: dotnet build SoundMonitor.csproj --configuration ${{ env.CONFIGURATION }} --no-restore
-
-      - name: Publish self-contained single-file (win-x64)
-        run: dotnet publish SoundMonitor.csproj --configuration ${{ env.CONFIGURATION }} --output ./publish-win-x64 --runtime win-x64 --self-contained true -p:PublishSingleFile=true
-
-      - name: Install Inno Setup
-        shell: pwsh
-        run: choco install innosetup --no-progress -y
-
-      - name: Build installer executable
-        shell: pwsh
-        run: |
-          $content = Get-Content -Raw "SoundMonitor.csproj"
-          $versionMatch = [regex]::Match($content, '<Version>([^<]+)</Version>')
-          if (-not $versionMatch.Success) {
-            throw "Version not found in SoundMonitor.csproj"
-          }
-
-          $version = $versionMatch.Groups[1].Value.Trim()
-          $iss = @"
-          #define MyAppName "SoundMonitor"
-          #define MyAppVersion "$version"
-          #define MyAppExeName "SoundMonitor.exe"
-
-          [Setup]
-          AppId={{A0AEE4E7-DA06-4688-87E2-42F11F66B4E8}
-          AppName={#MyAppName}
-          AppVersion={#MyAppVersion}
-          DefaultDirName={autopf}\{#MyAppName}
-          DefaultGroupName={#MyAppName}
-          OutputDir=artifacts
-          OutputBaseFilename=SoundMonitor-win-x64-setup
-          Compression=lzma
-          SolidCompression=yes
-          WizardStyle=modern
-
-          [Files]
-          Source: "publish-win-x64\SoundMonitor.exe"; DestDir: "{app}"; Flags: ignoreversion
-
-          [Tasks]
-          Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Additional icons:"
-
-          [Icons]
-          Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
-          Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
-
-          [Run]
-          Filename: "{app}\{#MyAppExeName}"; Description: "Launch SoundMonitor"; Flags: nowait postinstall skipifsilent
-          "@
-
-          Set-Content -Path ./installer.iss -Value $iss -Encoding UTF8
-          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" ./installer.iss
-
-      - name: Package executable artifacts
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Path ./artifacts -Force | Out-Null
-          Copy-Item ./publish-win-x64/SoundMonitor.exe ./artifacts/SoundMonitor-win-x64-self-contained.exe -Force
-
-      - name: Upload self-contained exe artifact
+      - name: Upload single-file exe artifact
         uses: actions/upload-artifact@v7
         with:
-          name: SoundMonitor-win-x64-self-contained.exe
-          path: ./artifacts/SoundMonitor-win-x64-self-contained.exe
-          retention-days: 30
-
-      - name: Upload installer exe artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: SoundMonitor-win-x64-setup.exe
-          path: ./artifacts/SoundMonitor-win-x64-setup.exe
+          path: ./dist/single-exe-win-x64/SoundMonitor.exe
+          archive: false
+          if-no-files-found: error
           retention-days: 30
 
   comment-pr-artifacts:
@@ -130,8 +64,7 @@ jobs:
 
               const artifacts = data.artifacts || [];
               const targetArtifactNames = [
-                'SoundMonitor-win-x64-self-contained.exe',
-                'SoundMonitor-win-x64-setup.exe',
+                'SoundMonitor.exe',
               ];
 
               const targetArtifacts = targetArtifactNames
