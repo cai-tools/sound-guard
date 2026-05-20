@@ -25,49 +25,14 @@ jobs:
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
-      - name: Resolve app version
-        id: version
-        shell: pwsh
-        run: |
-          $content = Get-Content -Raw "SoundMonitor.csproj"
-          $versionMatch = [regex]::Match($content, '<Version>([^<]+)</Version>')
-          if (-not $versionMatch.Success) {
-            throw "Version not found in SoundMonitor.csproj"
-          }
-
-          $version = $versionMatch.Groups[1].Value.Trim()
-          "value=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
-
-      - name: Install Inno Setup
-        shell: pwsh
-        run: choco install innosetup --no-progress -y
-
-      - name: Build distributable artifacts
-        shell: pwsh
-        run: |
-          ./scripts/build-release.ps1 -Version '${{ steps.version.outputs.value }}'
+      - name: Publish single-file exe (win-x64)
+        run: dotnet publish SoundMonitor.csproj --configuration ${{ env.CONFIGURATION }} --output ./dist/single-exe-win-x64 --runtime win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -p:PublishTrimmed=false -p:DebugType=None -p:DebugSymbols=false
 
       - name: Upload single-file exe artifact
         uses: actions/upload-artifact@v7
         with:
-          name: SoundMonitor-win-x64-single-exe
           path: ./dist/single-exe-win-x64/SoundMonitor.exe
-          if-no-files-found: error
-          retention-days: 30
-
-      - name: Upload portable zip artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: SoundMonitor-win-x64-portable-zip
-          path: ./dist/SoundMonitor-portable-win-x64-v*.zip
-          if-no-files-found: error
-          retention-days: 30
-
-      - name: Upload installer exe artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: SoundMonitor-win-x64-setup-exe
-          path: ./dist/installer/*.exe
+          archive: false
           if-no-files-found: error
           retention-days: 30
 
@@ -99,9 +64,7 @@ jobs:
 
               const artifacts = data.artifacts || [];
               const targetArtifactNames = [
-                'SoundMonitor-win-x64-single-exe',
-                'SoundMonitor-win-x64-portable-zip',
-                'SoundMonitor-win-x64-setup-exe',
+                'SoundMonitor.exe',
               ];
 
               const targetArtifacts = targetArtifactNames
