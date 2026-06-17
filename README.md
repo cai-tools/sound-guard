@@ -5,9 +5,11 @@ Windows WPF 应用：实时采集麦克风、显示分贝曲线、阈值告警�
 ## 快速开始
 
 ```bash
-dotnet restore
-dotnet run --project .\SoundMonitor.csproj
+dotnet restore .\src\SoundMonitor\SoundMonitor.csproj
+dotnet run --project .\src\SoundMonitor\SoundMonitor.csproj
 ```
+
+说明：仓库采用 `src + tests` 结构。根目录执行命令时请显式指定项目或解决方案文件。
 
 ## 阈值规则
 
@@ -26,7 +28,13 @@ dotnet run --project .\SoundMonitor.csproj
 ## 构建
 
 ```bash
-dotnet build -c Release
+dotnet build .\src\SoundMonitor\SoundMonitor.csproj -c Release
+```
+
+## 测试
+
+```bash
+dotnet test .\tests\SoundMonitor.Tests\SoundMonitor.Tests.csproj
 ```
 
 ## 分发打包

@@ -7,7 +7,7 @@ $ErrorActionPreference = "Stop"
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProjectRoot = Resolve-Path (Join-Path $ScriptDir "..")
-$ProjectFile = Join-Path $ProjectRoot "SoundMonitor.csproj"
+$ProjectFile = Join-Path $ProjectRoot "src\SoundMonitor\SoundMonitor.csproj"
 
 $DistDir = Join-Path $ProjectRoot "dist"
 $PortableDir = Join-Path $DistDir "portable-win-x64"

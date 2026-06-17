@@ -10,6 +10,7 @@ obj/
 # Visual Studio / VS Code
 .vs/
 .vscode/
+*.lscache
 
 # Logs
 *.log
