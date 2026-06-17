@@ -30,7 +30,7 @@ jobs:
         id: version_check
         shell: pwsh
         run: |
-          $currentContent = Get-Content -Raw "SoundMonitor.csproj"
+          $currentContent = Get-Content -Raw "src/SoundMonitor/SoundMonitor.csproj"
           $currentMatch = [regex]::Match($currentContent, '<Version>([^<]+)</Version>')
           if (-not $currentMatch.Success) {
             throw "Current version not found in SoundMonitor.csproj"
@@ -41,7 +41,7 @@ jobs:
           $previousVersion = ''
 
           try {
-            $previousContent = git show HEAD~1:SoundMonitor.csproj
+            $previousContent = git show HEAD~1:src/SoundMonitor/SoundMonitor.csproj
             if ($LASTEXITCODE -eq 0 -and $previousContent) {
               $previousMatch = [regex]::Match(($previousContent -join "`n"), '<Version>([^<]+)</Version>')
               if ($previousMatch.Success) {
@@ -78,7 +78,7 @@ jobs:
 
       - name: Restore dependencies
         if: steps.version_check.outputs.changed == 'true' && steps.tag_check.outputs.exists != 'true'
-        run: dotnet restore SoundMonitor.csproj
+        run: dotnet restore src/SoundMonitor/SoundMonitor.csproj
 
       - name: Install Inno Setup
         if: steps.version_check.outputs.changed == 'true' && steps.tag_check.outputs.exists != 'true'
