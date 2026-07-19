@@ -24,6 +24,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
     private readonly AudioCaptureService _audioService;
     private readonly NotificationService _notificationService;
+    private readonly StartupRegistrationService _startupRegistrationService;
     private readonly ThresholdConfig _thresholdConfig;
     private readonly SoundLevelMeter _soundLevelMeter;
     private readonly ObservableCollection<ObservableValue> _decibelValues;
@@ -108,6 +109,14 @@ public partial class MainViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private string _settingsSyncHintText = string.Empty;
 
+    [ObservableProperty]
+    private bool _isAutoStartEnabled;
+
+    [ObservableProperty]
+    private string _autoStartStatusText = string.Empty;
+
+    private bool _isLoadingStartupState;
+
     public ObservableCollection<string> Devices { get; } = new();
 
     public string QuietRangeText => $"安静 0-{_thresholdConfig.QuietMax:F0}dB";
@@ -149,6 +158,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         AppLogger.Initialize();
         _audioService = new AudioCaptureService();
         _notificationService = new NotificationService();
+        _startupRegistrationService = new StartupRegistrationService();
         _thresholdConfig = new ThresholdConfig();
         _soundLevelMeter = new SoundLevelMeter(SampleRate)
         {
@@ -176,9 +186,31 @@ public partial class MainViewModel : ObservableObject, IDisposable
         };
 
         LoadDevices();
+        LoadStartupState();
         InitializeSettingsInputs();
         RefreshSettingsState();
         AppLogger.Info("主视图模型初始化完成");
+    }
+
+    private void LoadStartupState()
+    {
+        _isLoadingStartupState = true;
+
+        try
+        {
+            IsAutoStartEnabled = _startupRegistrationService.IsEnabled();
+            AutoStartStatusText = IsAutoStartEnabled ? "开机自启已开启" : "开机自启未开启";
+        }
+        catch (Exception ex)
+        {
+            IsAutoStartEnabled = false;
+            AutoStartStatusText = "读取自启动状态失败";
+            AppLogger.Error("读取自启动状态失败", ex);
+        }
+        finally
+        {
+            _isLoadingStartupState = false;
+        }
     }
 
     private void InitializeSettingsInputs()
@@ -212,6 +244,31 @@ public partial class MainViewModel : ObservableObject, IDisposable
     partial void OnNotificationThresholdIndexChanged(int value)
     {
         RefreshSettingsState();
+    }
+
+    partial void OnIsAutoStartEnabledChanged(bool value)
+    {
+        if (_isLoadingStartupState)
+        {
+            return;
+        }
+
+        try
+        {
+            _startupRegistrationService.SetEnabled(value);
+            AutoStartStatusText = value ? "已添加到开机自启" : "已取消开机自启";
+            StatusText = AutoStartStatusText;
+            AppLogger.Info(value ? "已启用开机自启" : "已取消开机自启");
+        }
+        catch (Exception ex)
+        {
+            _isLoadingStartupState = true;
+            IsAutoStartEnabled = !value;
+            _isLoadingStartupState = false;
+            AutoStartStatusText = "自启动设置失败";
+            StatusText = "自启动设置失败";
+            AppLogger.Error("设置开机自启失败", ex);
+        }
     }
 
     private void RefreshSettingsState()

@@ -279,6 +279,28 @@
                                    Margin="0,6,0,12"
                                    Foreground="Gray"/>
 
+                        <Border Padding="10,8"
+                                CornerRadius="6"
+                                Margin="0,0,0,12"
+                                BorderThickness="1"
+                                BorderBrush="#D7E3F4"
+                                Background="#F7FAFF">
+                            <StackPanel>
+                                <CheckBox Content="开机自启"
+                                          IsChecked="{Binding IsAutoStartEnabled}"
+                                          FontWeight="SemiBold"
+                                          Foreground="#333"/>
+                                <TextBlock Text="将当前用户注册到 Windows 自启动项，开机后自动打开应用。"
+                                           Margin="22,4,0,0"
+                                           Foreground="Gray"
+                                           FontSize="12"/>
+                                <TextBlock Text="{Binding AutoStartStatusText}"
+                                           Margin="22,2,0,0"
+                                           Foreground="#607D8B"
+                                           FontSize="12"/>
+                            </StackPanel>
+                        </Border>
+
                         <TextBlock Text="阈值预览"
                                    Margin="0,0,0,8"
                                    FontWeight="SemiBold"
