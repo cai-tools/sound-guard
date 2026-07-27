@@ -24,9 +24,14 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
     private readonly AudioCaptureService _audioService;
     private readonly NotificationService _notificationService;
+    private readonly StartupRegistrationService _startupRegistrationService;
     private readonly ThresholdConfig _thresholdConfig;
     private readonly SoundLevelMeter _soundLevelMeter;
     private readonly ObservableCollection<ObservableValue> _decibelValues;
+    private double _appliedQuietMax;
+    private double _appliedNormalMax;
+    private double _appliedLoudMax;
+    private int _appliedNotificationThresholdIndex;
     private const int MaxDataPoints = 100;
 
     [ObservableProperty]
@@ -68,12 +73,60 @@ public partial class MainViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private int _notificationThresholdIndex;
 
+    [ObservableProperty]
+    private bool _quietInputIsValid = true;
+
+    [ObservableProperty]
+    private bool _normalInputIsValid = true;
+
+    [ObservableProperty]
+    private bool _loudInputIsValid = true;
+
+    [ObservableProperty]
+    private bool _isPreviewValid;
+
+    [ObservableProperty]
+    private bool _hasUnsavedSettings;
+
+    [ObservableProperty]
+    private string _previewSummaryText = string.Empty;
+
+    [ObservableProperty]
+    private string _previewQuietRangeText = "安静 0--dB";
+
+    [ObservableProperty]
+    private string _previewNormalRangeText = "正常 ---dB";
+
+    [ObservableProperty]
+    private string _previewLoudRangeText = "嘈杂 ---dB";
+
+    [ObservableProperty]
+    private string _previewDangerRangeText = "危险 --+dB";
+
+    [ObservableProperty]
+    private string _settingsValidationMessage = string.Empty;
+
+    [ObservableProperty]
+    private string _settingsSyncHintText = string.Empty;
+
+    [ObservableProperty]
+    private bool _isAutoStartEnabled;
+
+    [ObservableProperty]
+    private string _autoStartStatusText = string.Empty;
+
+    [ObservableProperty]
+    private string _autoStartButtonText = "开启开机自启";
+
+    private bool _isLoadingStartupState;
+
     public ObservableCollection<string> Devices { get; } = new();
 
     public string QuietRangeText => $"安静 0-{_thresholdConfig.QuietMax:F0}dB";
     public string NormalRangeText => $"正常 {_thresholdConfig.QuietMax:F0}-{_thresholdConfig.NormalMax:F0}dB";
     public string LoudRangeText => $"嘈杂 {_thresholdConfig.NormalMax:F0}-{_thresholdConfig.LoudMax:F0}dB";
     public string DangerRangeText => $"危险 {_thresholdConfig.LoudMax:F0}+dB";
+    public bool CanApplySettings => IsPreviewValid && HasUnsavedSettings;
 
     public ISeries[] Series { get; }
 
@@ -108,6 +161,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         AppLogger.Initialize();
         _audioService = new AudioCaptureService();
         _notificationService = new NotificationService();
+        _startupRegistrationService = new StartupRegistrationService();
         _thresholdConfig = new ThresholdConfig();
         _soundLevelMeter = new SoundLevelMeter(SampleRate)
         {
@@ -135,8 +189,32 @@ public partial class MainViewModel : ObservableObject, IDisposable
         };
 
         LoadDevices();
+        LoadStartupState();
         InitializeSettingsInputs();
+        RefreshSettingsState();
         AppLogger.Info("主视图模型初始化完成");
+    }
+
+    private void LoadStartupState()
+    {
+        _isLoadingStartupState = true;
+
+        try
+        {
+            IsAutoStartEnabled = _startupRegistrationService.IsEnabled();
+            UpdateAutoStartUiState(IsAutoStartEnabled);
+        }
+        catch (Exception ex)
+        {
+            IsAutoStartEnabled = false;
+            AutoStartStatusText = "读取自启动状态失败";
+            AutoStartButtonText = "开启开机自启";
+            AppLogger.Error("读取自启动状态失败", ex);
+        }
+        finally
+        {
+            _isLoadingStartupState = false;
+        }
     }
 
     private void InitializeSettingsInputs()
@@ -145,6 +223,136 @@ public partial class MainViewModel : ObservableObject, IDisposable
         NormalMaxInput = _thresholdConfig.NormalMax.ToString("F0", CultureInfo.InvariantCulture);
         LoudMaxInput = _thresholdConfig.LoudMax.ToString("F0", CultureInfo.InvariantCulture);
         NotificationThresholdIndex = GetThresholdIndex(_thresholdConfig.WarningLevel);
+
+        _appliedQuietMax = _thresholdConfig.QuietMax;
+        _appliedNormalMax = _thresholdConfig.NormalMax;
+        _appliedLoudMax = _thresholdConfig.LoudMax;
+        _appliedNotificationThresholdIndex = NotificationThresholdIndex;
+    }
+
+    partial void OnQuietMaxInputChanged(string value)
+    {
+        RefreshSettingsState();
+    }
+
+    partial void OnNormalMaxInputChanged(string value)
+    {
+        RefreshSettingsState();
+    }
+
+    partial void OnLoudMaxInputChanged(string value)
+    {
+        RefreshSettingsState();
+    }
+
+    partial void OnNotificationThresholdIndexChanged(int value)
+    {
+        RefreshSettingsState();
+    }
+
+    [RelayCommand]
+    private void ToggleAutoStart()
+    {
+        SetAutoStartEnabled(!IsAutoStartEnabled);
+    }
+
+    private void SetAutoStartEnabled(bool enabled)
+    {
+        if (_isLoadingStartupState)
+        {
+            return;
+        }
+
+        try
+        {
+            _startupRegistrationService.SetEnabled(enabled);
+            IsAutoStartEnabled = enabled;
+            AutoStartStatusText = enabled ? "已添加到开机自启" : "已取消开机自启";
+            AutoStartButtonText = enabled ? "取消开机自启" : "开启开机自启";
+            StatusText = AutoStartStatusText;
+            AppLogger.Info(enabled ? "已启用开机自启" : "已取消开机自启");
+        }
+        catch (Exception ex)
+        {
+            AutoStartStatusText = "自启动设置失败";
+            AutoStartButtonText = IsAutoStartEnabled ? "取消开机自启" : "开启开机自启";
+            StatusText = "自启动设置失败";
+            AppLogger.Error("设置开机自启失败", ex);
+        }
+    }
+
+    private void UpdateAutoStartUiState(bool isEnabled)
+    {
+        AutoStartStatusText = isEnabled ? "开机自启已开启" : "开机自启未开启";
+        AutoStartButtonText = isEnabled ? "取消开机自启" : "开启开机自启";
+    }
+
+    private void RefreshSettingsState()
+    {
+        var quietParsed = TryParseInput(QuietMaxInput, out var quietMax);
+        var normalParsed = TryParseInput(NormalMaxInput, out var normalMax);
+        var loudParsed = TryParseInput(LoudMaxInput, out var loudMax);
+
+        QuietInputIsValid = quietParsed && quietMax > 0 && (!normalParsed || quietMax < normalMax);
+        NormalInputIsValid = normalParsed && normalMax > 0 && (!quietParsed || quietMax < normalMax) && (!loudParsed || normalMax < loudMax);
+        LoudInputIsValid = loudParsed && loudMax <= 120 && (!normalParsed || normalMax < loudMax);
+
+        IsPreviewValid = quietParsed && normalParsed && loudParsed &&
+                         quietMax > 0 && quietMax < normalMax && normalMax < loudMax && loudMax <= 120;
+
+        PreviewSummaryText = IsPreviewValid
+            ? $"预览：安静 0-{quietMax:F0}dB | 正常 {quietMax:F0}-{normalMax:F0}dB | 嘈杂 {normalMax:F0}-{loudMax:F0}dB | 危险 {loudMax:F0}+dB"
+            : "预览：请输入有效阈值后生成";
+
+        if (IsPreviewValid)
+        {
+            PreviewQuietRangeText = $"安静 0-{quietMax:F0}dB";
+            PreviewNormalRangeText = $"正常 {quietMax:F0}-{normalMax:F0}dB";
+            PreviewLoudRangeText = $"嘈杂 {normalMax:F0}-{loudMax:F0}dB";
+            PreviewDangerRangeText = $"危险 {loudMax:F0}+dB";
+        }
+        else
+        {
+            PreviewQuietRangeText = "安静 0--dB";
+            PreviewNormalRangeText = "正常 ---dB";
+            PreviewLoudRangeText = "嘈杂 ---dB";
+            PreviewDangerRangeText = "危险 --+dB";
+        }
+
+        SettingsValidationMessage = IsPreviewValid
+            ? string.Empty
+            : "请输入有效阈值，且满足 0 < 安静 < 正常 < 嘈杂 <= 120";
+
+        HasUnsavedSettings = ComputeHasUnsavedSettings(quietParsed, normalParsed, loudParsed, quietMax, normalMax, loudMax);
+        SettingsSyncHintText = HasUnsavedSettings ? "你已修改参数，点击“应用设置”后才会生效。" : "当前设置已生效。";
+        OnPropertyChanged(nameof(CanApplySettings));
+    }
+
+    private bool ComputeHasUnsavedSettings(
+        bool quietParsed,
+        bool normalParsed,
+        bool loudParsed,
+        double quietMax,
+        double normalMax,
+        double loudMax)
+    {
+        if (quietParsed && normalParsed && loudParsed)
+        {
+            return !NearlyEqual(quietMax, _appliedQuietMax) ||
+                   !NearlyEqual(normalMax, _appliedNormalMax) ||
+                   !NearlyEqual(loudMax, _appliedLoudMax) ||
+                   NotificationThresholdIndex != _appliedNotificationThresholdIndex;
+        }
+
+        return !string.Equals(QuietMaxInput.Trim(), _appliedQuietMax.ToString("F0", CultureInfo.InvariantCulture), StringComparison.Ordinal) ||
+               !string.Equals(NormalMaxInput.Trim(), _appliedNormalMax.ToString("F0", CultureInfo.InvariantCulture), StringComparison.Ordinal) ||
+               !string.Equals(LoudMaxInput.Trim(), _appliedLoudMax.ToString("F0", CultureInfo.InvariantCulture), StringComparison.Ordinal) ||
+               NotificationThresholdIndex != _appliedNotificationThresholdIndex;
+    }
+
+    private static bool NearlyEqual(double left, double right)
+    {
+        return Math.Abs(left - right) < 0.0001;
     }
 
     /// <summary>
@@ -270,31 +478,34 @@ public partial class MainViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private void ApplySettings()
     {
-        if (!TryParseInput(QuietMaxInput, out var quietMax) ||
-            !TryParseInput(NormalMaxInput, out var normalMax) ||
-            !TryParseInput(LoudMaxInput, out var loudMax))
+        if (!IsPreviewValid)
         {
-            StatusText = "设置无效：请输入有效数字";
+            StatusText = string.IsNullOrWhiteSpace(SettingsValidationMessage)
+                ? "设置无效：请检查输入"
+                : $"设置无效：{SettingsValidationMessage}";
             AppLogger.Warn("应用设置失败：分段阈值存在无效输入");
             return;
         }
 
-        if (!(quietMax > 0 && quietMax < normalMax && normalMax < loudMax && loudMax <= 120))
-        {
-            StatusText = "设置无效：请确保 0 < 安静 < 正常 < 嘈杂 <= 120";
-            AppLogger.Warn($"应用设置失败：阈值顺序错误，quiet={quietMax}, normal={normalMax}, loud={loudMax}");
-            return;
-        }
+        TryParseInput(QuietMaxInput, out var quietMax);
+        TryParseInput(NormalMaxInput, out var normalMax);
+        TryParseInput(LoudMaxInput, out var loudMax);
 
         _thresholdConfig.QuietMax = quietMax;
         _thresholdConfig.NormalMax = normalMax;
         _thresholdConfig.LoudMax = loudMax;
         _thresholdConfig.WarningLevel = GetThresholdLevelFromIndex(NotificationThresholdIndex);
 
+        _appliedQuietMax = quietMax;
+        _appliedNormalMax = normalMax;
+        _appliedLoudMax = loudMax;
+        _appliedNotificationThresholdIndex = NotificationThresholdIndex;
+
         OnPropertyChanged(nameof(QuietRangeText));
         OnPropertyChanged(nameof(NormalRangeText));
         OnPropertyChanged(nameof(LoudRangeText));
         OnPropertyChanged(nameof(DangerRangeText));
+        RefreshSettingsState();
 
         StatusText = "设置已应用";
         AppLogger.Info(
@@ -311,8 +522,9 @@ public partial class MainViewModel : ObservableObject, IDisposable
     {
         return index switch
         {
-            0 => ThresholdLevel.Normal,
-            2 => ThresholdLevel.Danger,
+            0 => ThresholdLevel.Quiet,
+            1 => ThresholdLevel.Normal,
+            3 => ThresholdLevel.Danger,
             _ => ThresholdLevel.Loud
         };
     }
@@ -321,9 +533,10 @@ public partial class MainViewModel : ObservableObject, IDisposable
     {
         return level switch
         {
-            ThresholdLevel.Normal => 0,
-            ThresholdLevel.Danger => 2,
-            _ => 1
+            ThresholdLevel.Quiet => 0,
+            ThresholdLevel.Normal => 1,
+            ThresholdLevel.Loud => 2,
+            _ => 3
         };
     }
 

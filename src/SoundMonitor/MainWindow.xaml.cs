@@ -1,4 +1,6 @@
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
 using SoundMonitor.ViewModels;
 
 namespace SoundMonitor;
@@ -31,5 +33,22 @@ public partial class MainWindow : Window
             vm.Dispose();
         }
         base.OnClosed(e);
+    }
+
+    private void OnInputBoxGotKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
+    {
+        if (sender is TextBox textBox)
+        {
+            textBox.SelectAll();
+        }
+    }
+
+    private void OnInputBoxPreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is TextBox textBox && !textBox.IsKeyboardFocusWithin)
+        {
+            e.Handled = true;
+            textBox.Focus();
+        }
     }
 }

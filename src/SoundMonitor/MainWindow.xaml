@@ -38,11 +38,17 @@
                 </Setter.Value>
             </Setter>
             <Style.Triggers>
-                <Trigger Property="IsMouseOver" Value="True">
+                <MultiTrigger>
+                    <MultiTrigger.Conditions>
+                        <Condition Property="IsEnabled" Value="True"/>
+                        <Condition Property="IsMouseOver" Value="True"/>
+                    </MultiTrigger.Conditions>
                     <Setter Property="Background" Value="#1976D2"/>
-                </Trigger>
+                </MultiTrigger>
                 <Trigger Property="IsEnabled" Value="False">
                     <Setter Property="Background" Value="#BDBDBD"/>
+                    <Setter Property="Cursor" Value="No"/>
+                    <Setter Property="ForceCursor" Value="True"/>
                 </Trigger>
             </Style.Triggers>
         </Style>
@@ -54,6 +60,15 @@
                     <Setter Property="Background" Value="#D32F2F"/>
                 </Trigger>
             </Style.Triggers>
+        </Style>
+
+        <Style x:Key="ValidatedInputBox" TargetType="TextBox">
+            <Setter Property="Width" Value="120"/>
+            <Setter Property="Padding" Value="6,4"/>
+            <Setter Property="BorderBrush" Value="#D0D0D0"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <EventSetter Event="GotKeyboardFocus" Handler="OnInputBoxGotKeyboardFocus"/>
+            <EventSetter Event="PreviewMouseLeftButtonDown" Handler="OnInputBoxPreviewMouseLeftButtonDown"/>
         </Style>
 
         <!-- 卡片样式 -->
@@ -241,50 +256,249 @@
             <TabItem Header="设置页面">
                 <Border Style="{StaticResource CardBorder}">
                     <StackPanel>
-                        <TextBlock Text="监控参数设置" FontSize="18" FontWeight="Bold"/>
-                        <TextBlock Text="可修改分段阈值与通知阈值，修改后点击应用设置立即生效。"
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+
+                            <TextBlock Grid.Column="0"
+                                       Text="监控参数设置"
+                                       FontSize="18"
+                                       FontWeight="Bold"
+                                       VerticalAlignment="Center"/>
+
+                            <Button Grid.Column="1"
+                                    Content="打开日志"
+                                    Command="{Binding OpenLogCommand}"
+                                    Style="{StaticResource PrimaryButton}"
+                                    Width="100"
+                                    Padding="12,6"/>
+                        </Grid>
+                        <TextBlock Text="可修改分段阈值与通知阈值，修改后点击应用设置才会生效。"
                                    Margin="0,6,0,12"
                                    Foreground="Gray"/>
+
+                        <Border Padding="10,8"
+                                CornerRadius="6"
+                                Margin="0,0,0,12"
+                                BorderThickness="1"
+                                BorderBrush="#D7E3F4"
+                                Background="#F7FAFF">
+                            <StackPanel>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <TextBlock Grid.Column="0"
+                                               Text="开机自启"
+                                               FontWeight="SemiBold"
+                                               VerticalAlignment="Center">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Foreground" Value="#9E9E9E"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsAutoStartEnabled}" Value="True">
+                                                        <Setter Property="Foreground" Value="#2E7D32"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+
+                                    <Button Grid.Column="1"
+                                            Content="{Binding AutoStartButtonText}"
+                                            Command="{Binding ToggleAutoStartCommand}"
+                                            Style="{StaticResource PrimaryButton}"
+                                            Width="120"
+                                            Padding="12,6"/>
+                                </Grid>
+                                <TextBlock Text="将当前用户注册到 Windows 自启动项，开机后自动打开应用。"
+                                           Margin="0,8,0,0"
+                                           Foreground="Gray"
+                                           FontSize="12"/>
+                                <TextBlock Text="{Binding AutoStartStatusText}"
+                                           Margin="0,2,0,0"
+                                           Foreground="#607D8B"
+                                           FontSize="12"/>
+                            </StackPanel>
+                        </Border>
+
+                        <TextBlock Text="阈值预览"
+                                   Margin="0,0,0,8"
+                                   FontWeight="SemiBold"
+                                   Foreground="#555"/>
+
+                        <Border Padding="10,10"
+                                CornerRadius="6"
+                                Margin="0,0,0,12"
+                                BorderThickness="1"
+                                Background="#FAFAFA"
+                                BorderBrush="#E0E0E0">
+                            <WrapPanel>
+                                <Border Background="#4CAF50" CornerRadius="3" Padding="10,5" Margin="0,0,8,8">
+                                    <TextBlock Text="{Binding PreviewQuietRangeText}" Foreground="White" FontWeight="Bold"/>
+                                </Border>
+                                <Border Background="#2196F3" CornerRadius="3" Padding="10,5" Margin="0,0,8,8">
+                                    <TextBlock Text="{Binding PreviewNormalRangeText}" Foreground="White" FontWeight="Bold"/>
+                                </Border>
+                                <Border Background="#FF9800" CornerRadius="3" Padding="10,5" Margin="0,0,8,8">
+                                    <TextBlock Text="{Binding PreviewLoudRangeText}" Foreground="White" FontWeight="Bold"/>
+                                </Border>
+                                <Border Background="#F44336" CornerRadius="3" Padding="10,5" Margin="0,0,8,8">
+                                    <TextBlock Text="{Binding PreviewDangerRangeText}" Foreground="White" FontWeight="Bold"/>
+                                </Border>
+                            </WrapPanel>
+                        </Border>
+
+                        <TextBlock Text="{Binding SettingsValidationMessage}"
+                                   Margin="0,0,0,10"
+                                   Foreground="#D32F2F"
+                                   FontSize="12">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsPreviewValid}" Value="False">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
 
                         <WrapPanel>
                             <StackPanel Margin="0,0,12,12">
                                 <TextBlock Text="安静上限(dB)" FontSize="12" Foreground="Gray"/>
-                                <TextBox Text="{Binding QuietMaxInput, UpdateSourceTrigger=PropertyChanged}"
-                                         Width="120"/>
+                                <TextBox Text="{Binding QuietMaxInput, UpdateSourceTrigger=PropertyChanged}">
+                                    <TextBox.Style>
+                                        <Style TargetType="TextBox" BasedOn="{StaticResource ValidatedInputBox}">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding QuietInputIsValid}" Value="False">
+                                                    <Setter Property="BorderBrush" Value="#D32F2F"/>
+                                                    <Setter Property="BorderThickness" Value="2"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBox.Style>
+                                </TextBox>
                             </StackPanel>
 
                             <StackPanel Margin="0,0,12,12">
                                 <TextBlock Text="正常上限(dB)" FontSize="12" Foreground="Gray"/>
-                                <TextBox Text="{Binding NormalMaxInput, UpdateSourceTrigger=PropertyChanged}"
-                                         Width="120"/>
+                                <TextBox Text="{Binding NormalMaxInput, UpdateSourceTrigger=PropertyChanged}">
+                                    <TextBox.Style>
+                                        <Style TargetType="TextBox" BasedOn="{StaticResource ValidatedInputBox}">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding NormalInputIsValid}" Value="False">
+                                                    <Setter Property="BorderBrush" Value="#D32F2F"/>
+                                                    <Setter Property="BorderThickness" Value="2"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBox.Style>
+                                </TextBox>
                             </StackPanel>
 
                             <StackPanel Margin="0,0,12,12">
                                 <TextBlock Text="嘈杂上限(dB)" FontSize="12" Foreground="Gray"/>
-                                <TextBox Text="{Binding LoudMaxInput, UpdateSourceTrigger=PropertyChanged}"
-                                         Width="120"/>
+                                <TextBox Text="{Binding LoudMaxInput, UpdateSourceTrigger=PropertyChanged}">
+                                    <TextBox.Style>
+                                        <Style TargetType="TextBox" BasedOn="{StaticResource ValidatedInputBox}">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding LoudInputIsValid}" Value="False">
+                                                    <Setter Property="BorderBrush" Value="#D32F2F"/>
+                                                    <Setter Property="BorderThickness" Value="2"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBox.Style>
+                                </TextBox>
                             </StackPanel>
 
                             <StackPanel Margin="0,0,12,12">
                                 <TextBlock Text="通知阈值" FontSize="12" Foreground="Gray"/>
                                 <ComboBox SelectedIndex="{Binding NotificationThresholdIndex}" Width="160">
+                                    <ComboBoxItem Content="安静及以上"/>
                                     <ComboBoxItem Content="正常及以上"/>
                                     <ComboBoxItem Content="嘈杂及以上"/>
-                                    <ComboBoxItem Content="危险"/>
+                                    <ComboBoxItem Content="危险及以上"/>
                                 </ComboBox>
                             </StackPanel>
                         </WrapPanel>
 
+                        <Border Padding="10,8"
+                                CornerRadius="6"
+                                Margin="0,0,0,12"
+                                BorderThickness="1">
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <Setter Property="Background" Value="#E8F5E9"/>
+                                    <Setter Property="BorderBrush" Value="#81C784"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding HasUnsavedSettings}" Value="True">
+                                            <Setter Property="Background" Value="#FFF3E0"/>
+                                            <Setter Property="BorderBrush" Value="#FFB74D"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <TextBlock Text="{Binding SettingsSyncHintText}"
+                                       FontWeight="SemiBold">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Foreground" Value="#2E7D32"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding HasUnsavedSettings}" Value="True">
+                                                <Setter Property="Foreground" Value="#E65100"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </Border>
+
                         <StackPanel Orientation="Horizontal">
-                            <Button Content="应用设置"
-                                    Command="{Binding ApplySettingsCommand}"
-                                    Style="{StaticResource PrimaryButton}"
-                                    Width="100"/>
-                            <Button Content="打开日志"
-                                    Command="{Binding OpenLogCommand}"
-                                    Style="{StaticResource PrimaryButton}"
-                                    Width="100"
-                                    Margin="10,0,0,0"/>
+                            <Border Width="100" Background="Transparent">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="Cursor" Value="Arrow"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsPreviewValid}" Value="False">
+                                                <Setter Property="Cursor" Value="No"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+
+                                <Button Content="应用设置"
+                                        Command="{Binding ApplySettingsCommand}"
+                                        IsEnabled="{Binding CanApplySettings}"
+                                        Width="100">
+                                    <Button.Style>
+                                        <Style TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding HasUnsavedSettings}" Value="True">
+                                                    <Setter Property="Background" Value="#FB8C00"/>
+                                                </DataTrigger>
+                                                <MultiDataTrigger>
+                                                    <MultiDataTrigger.Conditions>
+                                                        <Condition Binding="{Binding HasUnsavedSettings}" Value="True"/>
+                                                        <Condition Binding="{Binding RelativeSource={RelativeSource Self}, Path=IsMouseOver}" Value="True"/>
+                                                    </MultiDataTrigger.Conditions>
+                                                    <Setter Property="Background" Value="#EF6C00"/>
+                                                </MultiDataTrigger>
+                                                <DataTrigger Binding="{Binding IsPreviewValid}" Value="False">
+                                                    <Setter Property="Background" Value="#E53935"/>
+                                                    <Setter Property="Foreground" Value="White"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Button.Style>
+                                </Button>
+                            </Border>
                         </StackPanel>
                     </StackPanel>
                 </Border>
