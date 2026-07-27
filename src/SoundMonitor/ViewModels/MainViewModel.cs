@@ -115,6 +115,9 @@ public partial class MainViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private string _autoStartStatusText = string.Empty;
 
+    [ObservableProperty]
+    private string _autoStartButtonText = "开启开机自启";
+
     private bool _isLoadingStartupState;
 
     public ObservableCollection<string> Devices { get; } = new();
@@ -199,12 +202,13 @@ public partial class MainViewModel : ObservableObject, IDisposable
         try
         {
             IsAutoStartEnabled = _startupRegistrationService.IsEnabled();
-            AutoStartStatusText = IsAutoStartEnabled ? "开机自启已开启" : "开机自启未开启";
+            UpdateAutoStartUiState(IsAutoStartEnabled);
         }
         catch (Exception ex)
         {
             IsAutoStartEnabled = false;
             AutoStartStatusText = "读取自启动状态失败";
+            AutoStartButtonText = "开启开机自启";
             AppLogger.Error("读取自启动状态失败", ex);
         }
         finally
@@ -246,7 +250,13 @@ public partial class MainViewModel : ObservableObject, IDisposable
         RefreshSettingsState();
     }
 
-    partial void OnIsAutoStartEnabledChanged(bool value)
+    [RelayCommand]
+    private void ToggleAutoStart()
+    {
+        SetAutoStartEnabled(!IsAutoStartEnabled);
+    }
+
+    private void SetAutoStartEnabled(bool enabled)
     {
         if (_isLoadingStartupState)
         {
@@ -255,20 +265,26 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
         try
         {
-            _startupRegistrationService.SetEnabled(value);
-            AutoStartStatusText = value ? "已添加到开机自启" : "已取消开机自启";
+            _startupRegistrationService.SetEnabled(enabled);
+            IsAutoStartEnabled = enabled;
+            AutoStartStatusText = enabled ? "已添加到开机自启" : "已取消开机自启";
+            AutoStartButtonText = enabled ? "取消开机自启" : "开启开机自启";
             StatusText = AutoStartStatusText;
-            AppLogger.Info(value ? "已启用开机自启" : "已取消开机自启");
+            AppLogger.Info(enabled ? "已启用开机自启" : "已取消开机自启");
         }
         catch (Exception ex)
         {
-            _isLoadingStartupState = true;
-            IsAutoStartEnabled = !value;
-            _isLoadingStartupState = false;
             AutoStartStatusText = "自启动设置失败";
+            AutoStartButtonText = IsAutoStartEnabled ? "取消开机自启" : "开启开机自启";
             StatusText = "自启动设置失败";
             AppLogger.Error("设置开机自启失败", ex);
         }
+    }
+
+    private void UpdateAutoStartUiState(bool isEnabled)
+    {
+        AutoStartStatusText = isEnabled ? "开机自启已开启" : "开机自启未开启";
+        AutoStartButtonText = isEnabled ? "取消开机自启" : "开启开机自启";
     }
 
     private void RefreshSettingsState()
